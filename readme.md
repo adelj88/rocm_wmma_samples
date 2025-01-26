@@ -15,7 +15,7 @@ This project aims to:
 
 - **Matrix Multiplication with WMMA Intrinsic:** Demonstrates how to use HIP-specific WMMA (simple implementation).
 - **Support for Arbitrary Sizes:** Goes beyond the fixed-size (16x16) example, allowing users to experiment with any matrix dimensions.
-- **Shared Memory and WMMA Comparison:** Runs both a shared memory kernel and a WMMA kernel for performance insights.
+- **Shared Memory and WMMA Comparison:** Runs both a shared memory kernel and a WMMA kernel for performance comparison.
 - **Verification Mode:** Compares GPU results with CPU reference computations to ensure correctness.
 
 ## Future Plans
@@ -36,8 +36,8 @@ If time permits, the following enhancements are planned:
 
 1. Clone the repository and navigate to its root directory:
    ```bash
-   git clone <repository-url>
-   cd <repository-directory>
+   git clone https://github.com/AJcodes/hip_wmma_samples.git
+   cd hip_wmma_samples
    ```
 2. Build the project:
    ```bash
