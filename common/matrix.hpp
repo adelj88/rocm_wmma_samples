@@ -16,6 +16,13 @@ enum class matrix_layout
     col_major ///< Column-major layout (elements consecutive in memory by column)
 };
 
+// Enum to specify which matrix is being accessed (A or B)
+enum class matrix_input
+{
+    matrix_a,
+    matrix_b
+};
+
 /**
  * @brief Template class representing a matrix with configurable layout
  * @tparam T Data type of matrix elements

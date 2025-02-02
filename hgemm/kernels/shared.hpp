@@ -7,19 +7,28 @@
 constexpr int shared_tile = 16;
 
 /**
- * Kernel for half-precision GEMM using shared memory.
+ * @brief Half-precision GEMM implementation using shared memory tiling
+ *
+ * This kernel implements matrix multiplication C = A × B using shared memory to improve
+ * performance. It divides input matrices into tiles of size shared_tile × shared_tile,
+ * loads these tiles into shared memory, and performs computations on the tiles to reduce
+ * global memory access.
  *
  * @tparam K_TYPE The type of kernel, should be 'kernel_type::shared'
- * @tparam shared_tile   Tile size for blocking (default is 16)
- * @param C       Output matrix
- * @param A       Input matrix A
- * @param B       Input matrix B
- * @param M       Number of rows in matrices A and C
- * @param N       Number of columns in matrices B and C
- * @param K       Number of columns in matrix A/rows in matrix B
+ * @param[out] C  Output matrix of size M × N
+ * @param[in]  A  Input matrix A of size M × K
+ * @param[in]  B  Input matrix B of size K × N (stored in column-major format)
+ * @param[in]  M  Number of rows in matrices A and C
+ * @param[in]  N  Number of columns in matrices B and C
+ * @param[in]  K  Number of columns in matrix A/rows in matrix B
+ *
+ * @note The kernel uses shared memory tiles of size shared_tile × shared_tile
+ * @note Matrix B is expected to be in column-major format for coalesced memory access
+ * @note Each thread block processes one tile of the output matrix C
  */
 template<kernel_type K_TYPE>
-__global__ auto kernel_hgemm(half* C, const half* A, const half* B, size_t M, size_t N, size_t K) ->
+__global__ auto __launch_bounds__(shared_tile * shared_tile)
+    kernel_hgemm(half* C, const half* A, const half* B, int M, int N, int K) ->
     typename std::enable_if<(K_TYPE == kernel_type::shared), void>::type
 {
     __shared__ half a_tile[shared_tile][shared_tile]; // Shared memory for tiles of matrix A

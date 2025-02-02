@@ -2,17 +2,50 @@
 #include <common/matrix.hpp>
 #include <hgemm/hgemm.hpp>
 
+template<kernel_type K_TYPE>
+struct layout_selector
+{
+    static constexpr matrix_layout a_layout = matrix_layout::col_major;
+    static constexpr matrix_layout b_layout = matrix_layout::row_major;
+    static constexpr matrix_layout c_layout = matrix_layout::row_major;
+};
+
+template<>
+struct layout_selector<kernel_type::shared>
+{
+    static constexpr matrix_layout a_layout = matrix_layout::row_major;
+    static constexpr matrix_layout b_layout = matrix_layout::col_major;
+    static constexpr matrix_layout c_layout = matrix_layout::row_major;
+};
+
+template<>
+struct layout_selector<kernel_type::wmma_naive>
+{
+    static constexpr matrix_layout a_layout = matrix_layout::row_major;
+    static constexpr matrix_layout b_layout = matrix_layout::col_major;
+    static constexpr matrix_layout c_layout = matrix_layout::row_major;
+};
+
+// Specialize for rocBLAS
+template<>
+struct layout_selector<kernel_type::rocblas>
+{
+    static constexpr matrix_layout a_layout = matrix_layout::col_major;
+    static constexpr matrix_layout b_layout = matrix_layout::col_major;
+    static constexpr matrix_layout c_layout = matrix_layout::col_major;
+};
+
 // Template function to run matrix multiplication with different kernel types and tile sizes
 template<kernel_type K_TYPE, bool VERIFY = false>
 int run_hgemm(size_t M, size_t N, size_t K)
 {
-    constexpr int runs = 10; // Number of runs for timing
+    constexpr int runs = 50; // Number of runs for timing
 
     // Allocate memory on host using std::vector
-    matrix<half, matrix_layout::row_major> h_A(M, K);
-    matrix<half, matrix_layout::col_major> h_B(K, N);
-    matrix<half, matrix_layout::row_major> h_C(M, N);
-    matrix<half, matrix_layout::row_major> h_C_ref(M, N); // Reference result on host
+    matrix<half, layout_selector<K_TYPE>::a_layout> h_A(M, K);
+    matrix<half, layout_selector<K_TYPE>::b_layout> h_B(K, N);
+    matrix<half, layout_selector<K_TYPE>::c_layout> h_C(M, N);
+    matrix<half, layout_selector<K_TYPE>::c_layout> h_C_ref(M, N);
 
     // Initialize input matrices with random values
     init_matrix(h_A.data(), h_A.size());
@@ -32,25 +65,25 @@ int run_hgemm(size_t M, size_t N, size_t K)
     HIP_CHECK(hipMemcpy(d_B, h_B.data(), h_B.size() * sizeof(half), hipMemcpyHostToDevice));
     HIP_CHECK(hipDeviceSynchronize());
 
-    float     elapsed_time = 0.0f;
     gpu_timer timer;
 
     // Warmup only
-    for(int i = 0; i < 2; ++i)
+    for(int i = 0; i < 5; ++i)
     {
         hgemm_gpu<K_TYPE>(d_C, d_A, d_B, M, N, K, stream);
         HIP_CHECK(hipPeekAtLastError());
     }
+    HIP_CHECK(hipDeviceSynchronize());
 
     // Launch kernel multiple times to average execution time
+    timer.start(stream);
     for(int i = 0; i < runs; ++i)
     {
-        timer.start(stream);
         // Execute the matrix multiplication kernel
         hgemm_gpu<K_TYPE>(d_C, d_A, d_B, M, N, K, stream);
         HIP_CHECK(hipPeekAtLastError());
-        elapsed_time += timer.stop(stream);
     }
+    float elapsed_time = timer.stop(stream);
 
     std::cout << "Kernel execution time for sizes (" << M << ", " << N << ", " << K
               << "): " << elapsed_time / runs << " ms" << std::endl;
@@ -75,26 +108,99 @@ int run_hgemm(size_t M, size_t N, size_t K)
     return 0;
 }
 
+struct test_config
+{
+    // Sizes where verification will be performed
+    std::vector<std::tuple<size_t, size_t, size_t>> verify_sizes = {
+        {128, 128, 128}
+    };
+
+    // Sizes for pure benchmarking
+    std::vector<std::tuple<size_t, size_t, size_t>> benchmark_sizes = {
+        {1024, 1024, 1024},
+        {4096, 4096, 4096}
+    };
+};
+
+// Helper function to convert kernel type to string
+inline const char* kernel_type_string(kernel_type type)
+{
+    switch(type)
+    {
+        case kernel_type::shared: return "Shared Memory";
+        case kernel_type::wmma_naive: return "WMMA Naive";
+        case kernel_type::wmma_shared: return "WMMA + Shared Memory";
+        case kernel_type::wmma_shared_warp: return "WMMA + Shared Memory + Warp Tiling";
+        case kernel_type::wmma_shared_warp_buf:
+            return "WMMA + Shared Memory + Warp Tiling + Double Buffering";
+        case kernel_type::wmma_shared_warp_buf_vec:
+            return "WMMA + Shared Memory + Warp Tiling + Double Buffering + Global "
+                   "Vectorized Loads";
+        case kernel_type::wmma_prefetch: return "WMMA Prefetch";
+#ifdef HAS_ROCWMMA
+        case kernel_type::rocwmma: return "rocWMMA";
+#endif
+        case kernel_type::rocblas: return "rocBLAS";
+        default: return "Unknown";
+    }
+}
+
+// Variadic template to run multiple kernel types
+template<kernel_type... Types>
+void run_all_kernels(const test_config& config)
+{
+    (run_kernel_tests<Types>(config), ...);
+}
+
+// Helper function to run a single kernel type with the given configuration
+template<kernel_type K_TYPE>
+void run_kernel_tests(const test_config& config)
+{
+    std::cout << "GEMM Kernel Type: " << kernel_type_string(K_TYPE) << std::endl;
+    std::cout << std::string(80, '-') << std::endl;
+
+    // Run verification tests
+    for(const auto& [M, N, K] : config.verify_sizes)
+    {
+        run_hgemm<K_TYPE, true>(M, N, K);
+    }
+
+    // Run benchmark tests
+    for(const auto& [M, N, K] : config.benchmark_sizes)
+    {
+        run_hgemm<K_TYPE, false>(M, N, K);
+    }
+
+    std::cout << std::string(80, '-') << std::endl;
+}
+
 int main(int argc, char** argv)
 {
-    size_t M = 512; // Number of rows in matrix C and A
-    size_t N = 512; // Number of columns in matrix C and B
-    size_t K = 512; // Number of columns in matrix A and rows in matrix B
+    test_config config{
+        .verify_sizes    = {{128, 128, 128}},
+        .benchmark_sizes = {{256, 256, 256},
+                            {512, 512, 512},
+                            {1024, 1024, 1024},
+                            {2048, 2048, 2048},
+                            {4096, 4096, 4096}}
+    };
 
-    // Run with different sizes for shared memory kernel
-    std::cout << "GEMM Kernel Type: Shared Memory" << std::endl;
-    std::cout << "-----------------------------------------" << std::endl;
-    run_hgemm<kernel_type::shared, true>(128, 128, 128);
-    run_hgemm<kernel_type::shared>(M, N, K);
-    std::cout << "-----------------------------------------" << std::endl;
-    std::cout << std::endl;
+    run_all_kernels<kernel_type::shared,
+                    kernel_type::wmma_naive,
+                    kernel_type::wmma_shared,
+                    kernel_type::wmma_shared_warp,
+                    kernel_type::wmma_shared_warp_buf,
+                    kernel_type::wmma_shared_warp_buf_vec,
+                    kernel_type::wmma_prefetch
+#ifdef HAS_ROCWMMA
+                    ,
+                    kernel_type::rocwmma
+#endif
+                    >(config);
 
-    // Run with different sizes for WMMA kernel
-    std::cout << "GEMM Kernel Type: WMMA" << std::endl;
-    std::cout << "-----------------------------------------" << std::endl;
-    run_hgemm<kernel_type::wmma, true>(128, 128, 128);
-    run_hgemm<kernel_type::wmma>(M, N, K);
-    std::cout << "-----------------------------------------" << std::endl;
+    init_rocblas();
+    run_kernel_tests<kernel_type::rocblas>(config);
+    cleanup_rocblas();
 
     return 0;
 }

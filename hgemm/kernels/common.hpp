@@ -1,15 +1,34 @@
 #ifndef HIP_KERNEL_HPP
 #define HIP_KERNEL_HPP
 
-#include <hip/hip_fp16.h> // Include for half-precision floating-point types
-#include <type_traits> // For type traits, used in template specialization
+#include <hip/hip_fp16.h>
+#include <type_traits>
 
 // Enum to choose between shared memory and WMMA-based kernel implementation
 enum class kernel_type
 {
     shared,
-    wmma
+    wmma_naive,
+    wmma_shared,
+    wmma_shared_warp,
+    wmma_shared_warp_buf,
+    wmma_shared_warp_buf_vec,
+    wmma_prefetch,
+    rocblas
+#ifdef HAS_ROCWMMA
+    ,rocwmma
+#endif
 };
+
+// Tile size used for wmma kernel
+constexpr int wmma_tile = 16;
+
+typedef _Float16 half4 __attribute__((ext_vector_type(4)));
+typedef _Float16 half8 __attribute__((ext_vector_type(8)));
+typedef _Float16 half16 __attribute__((ext_vector_type(16)));
+
+template<kernel_type KT>
+struct wmma_config;
 
 /**
  * Kernel Definition for half-precision GEMM.
@@ -23,7 +42,7 @@ enum class kernel_type
  * @param K       Number of columns in matrix A/rows in matrix B
  */
 template<kernel_type K_TYPE>
-__global__ auto kernel_hgemm(half* C, const half* A, const half* B, size_t M, size_t N, size_t K);
+__global__ auto kernel_hgemm(half* C, const half* A, const half* B, int M, int N, int K);
 
 /**
  * @brief Calculate ceiling division of two integers
@@ -37,7 +56,7 @@ int ceil_div(int a, int b)
 }
 
 /**
- * Function Definition for calling shared memory GEMM kernel
+ * Function Definition for calling GEMM kernel
  *
  * @tparam K_TYPE The type of kernel
  * @param C       Output matrix

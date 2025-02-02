@@ -1,15 +1,24 @@
 #ifndef HIP_HGEMM_HPP
 #define HIP_HGEMM_HPP
 
-#include <common/matrix.hpp> // Assumed to contain matrix-related utilities or definitions
-#include <hgemm/kernels/shared.hpp> // Assumed to contain matrix-related utilities or definitions
-#include <hgemm/kernels/wmma.hpp> // Include for half-precision floating-point types
+#include <common/matrix.hpp>
+#include <hgemm/kernels/shared.hpp>
+#include <hgemm/kernels/wmma.hpp>
+#include <hgemm/kernels/wmma_shared.hpp>
+#include <hgemm/kernels/wmma_shared_warp.hpp>
+#include <hgemm/kernels/wmma_shared_warp_buf.hpp>
+#include <hgemm/kernels/wmma_shared_warp_buf_vec.hpp>
+#include <hgemm/kernels/wmma_prefetch.hpp>
+#include <hgemm/kernels/rocblas.hpp>
+#ifdef HAS_ROCWMMA
+#include <hgemm/kernels/rocwmma.hpp>
+#endif
 
 /**
  * @brief CPU reference implementation
  */
-template<matrix_layout L1, matrix_layout L2>
-void hgemm_cpu(matrix<half, L1>& C, const matrix<half, L1>& A, const matrix<half, L2>& B)
+template<matrix_layout L1, matrix_layout L2, matrix_layout L3>
+void hgemm_cpu(matrix<half, L1>& C, const matrix<half, L2>& A, const matrix<half, L3>& B)
 {
     for(size_t i = 0; i < C.rows(); ++i)
     {

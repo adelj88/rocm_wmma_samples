@@ -1,32 +1,27 @@
 #ifndef HIP_WMMA_RDNA3_HPP
 #define HIP_WMMA_RDNA3_HPP
 
-#include <common/matrix.hpp> // Assumed to contain matrix-related utilities or definitions
+#include <common/matrix.hpp>
 #include <hgemm/kernels/common.hpp>
 
-// Tile size used for wmma kernel
-constexpr int wmma_tile = 16;
-
-typedef _Float16 half16 __attribute__((ext_vector_type(wmma_tile)));
-
-// Enum to specify which matrix is being accessed (A or B)
-enum class matrix_input
-{
-    matrix_a,
-    matrix_b
-};
-
 /**
- * Device function to load a tile of matrix A or B.
+ * @brief Half-precision GEMM implementation using WMMA (Wave Matrix Multiply-Accumulate) instructions
  *
- * @tparam matrix   The input matrix (A or B)
- * @tparam access   The layout of the matrix (row-major or col-major)
- * @param frag      Fragment to load data into
- * @param data      Pointer to matrix data
- * @param row       Starting row index in the matrix
- * @param col       Starting column index in the matrix
- * @param M         Number of rows in the matrix
- * @param N         Number of columns in the matrix
+ * This kernel implements matrix multiplication C = A × B using AMD's WMMA instructions for
+ * hardware-accelerated matrix operations. It processes 16×16 matrix tiles using wave-wide
+ * operations.
+ *
+ * @tparam K_TYPE The type of kernel, should be 'kernel_type::wmma_naive'
+ * @param[out] C  Output matrix of size M × N
+ * @param[in]  A  Input matrix A of size M × K
+ * @param[in]  B  Input matrix B of size K × N (stored in column-major format)
+ * @param[in]  M  Number of rows in matrices A and C
+ * @param[in]  N  Number of columns in matrices B and C
+ * @param[in]  K  Number of columns in matrix A/rows in matrix B
+ *
+ * @note Uses WMMA intrinsics specific to AMD RDNA 3 architecture
+ * @note Each warp processes a 16×16 tile of the output matrix
+ * @note Matrix B should be in column-major format for optimal memory access
  */
 template<matrix_input matrix, matrix_layout access>
 __device__ inline auto
@@ -40,12 +35,37 @@ __device__ inline auto
     int lane   = threadIdx.x % half_warp; // Lane index within the half-wave
     int offset = row + lane;
 
+    const half* tmp = reinterpret_cast<const half*>(data + offset * N + col);
 #pragma unroll
     for(int i = 0; i < wmma_tile; ++i)
     {
         if(offset < M && col + i < N)
         {
-            frag[i] = data[offset * N + (col + i)];
+            frag[i] = tmp[i];
+        }
+    }
+}
+
+template<matrix_input matrix, matrix_layout access>
+__device__ inline auto
+    load_matrix(half16& frag, const half* data, int row, int col, int M, int N) ->
+    typename std::enable_if<(matrix == matrix_input::matrix_a
+                             && access == matrix_layout::col_major),
+                            void>::type
+{
+    constexpr int half_warp = warpSize / 2;
+    // lane is (0-31) mod 16 instead of 0-31 due to matrix replication in RDNA 3
+    int lane   = threadIdx.x % half_warp; // Lane index within the half-wave
+    int offset = row + lane;
+
+    const half* tmp = reinterpret_cast<const half*>(data + col * M + offset);
+#pragma unroll
+    for(int i = 0; i < wmma_tile; ++i)
+    {
+        if(col + i < N && offset < M)
+        {
+            frag[i] = *tmp;
+            tmp += M;
         }
     }
 }
@@ -62,12 +82,14 @@ __device__ inline auto
     int lane   = threadIdx.x % half_warp; // Lane index within the half-wave
     int offset = col + lane;
 
+    const half* tmp = reinterpret_cast<const half*>(data + row * N + offset);
 #pragma unroll
     for(int i = 0; i < wmma_tile; ++i)
     {
         if(row + i < M && offset < N)
         {
-            frag[i] = data[(row + i) * N + offset];
+            frag[i] = *tmp;
+            tmp += N;
         }
     }
 }
@@ -84,12 +106,13 @@ __device__ inline auto
     int lane   = threadIdx.x % half_warp; // Lane index within the half-wave
     int offset = col + lane;
 
+    const half* tmp = reinterpret_cast<const half*>(data + offset * M + row);
 #pragma unroll
     for(int i = 0; i < wmma_tile; ++i)
     {
         if(offset < N && (row + i) < M)
         {
-            frag[i] = data[offset * M + (row + i)];
+            frag[i] = tmp[i];
         }
     }
 }
@@ -97,7 +120,6 @@ __device__ inline auto
 /**
  * Device function to store a tile of matrix C in row-major order.
  *
- * @tparam wmma_tile Tile size for blocking (default is 16)
  * @param data Pointer to output matrix data
  * @param frag Fragment containing the computed results
  * @param row Starting row index in the matrix
@@ -112,6 +134,8 @@ __device__ inline void store_matrix(half* data, half16& frag, int row, int col, 
     int           half_warp_id = (threadIdx.x % warpSize) / half_warp; // Index for half-warp
     int           offset       = col + lane;
 
+    half* tmp = reinterpret_cast<half*>(offset + row * N);
+
 #pragma unroll
     for(int i = 0; i < wmma_tile / 2; ++i)
     {
@@ -123,8 +147,7 @@ __device__ inline void store_matrix(half* data, half16& frag, int row, int col, 
 /**
  * Kernel for half-precision GEMM using WMMA intrinsics.
  *
- * @tparam K_TYPE The type of kernel, should be 'kernel_type::wmma'
- * @tparam wmma_tile   Tile size for blocking (default is 16)
+ * @tparam K_TYPE The type of kernel, should be 'kernel_type::wmma_naive'
  * @param C       Output matrix
  * @param A       Input matrix A
  * @param B       Input matrix B
@@ -133,8 +156,9 @@ __device__ inline void store_matrix(half* data, half16& frag, int row, int col, 
  * @param K       Number of columns in matrix A/rows in matrix B
  */
 template<kernel_type K_TYPE>
-__global__ auto kernel_hgemm(half* C, const half* A, const half* B, size_t M, size_t N, size_t K) ->
-    typename std::enable_if<(K_TYPE == kernel_type::wmma), void>::type
+__global__ auto __launch_bounds__(warpSize * 16)
+    kernel_hgemm(half* C, const half* A, const half* B, int M, int N, int K) ->
+    typename std::enable_if<(K_TYPE == kernel_type::wmma_naive), void>::type
 {
     int ix = (blockIdx.x * blockDim.x + threadIdx.x) / warpSize; // Row of tile in C/A
     int iy = blockIdx.y * blockDim.y + threadIdx.y; // Column of tile in C/B
@@ -163,9 +187,9 @@ __global__ auto kernel_hgemm(half* C, const half* A, const half* B, size_t M, si
 }
 
 /**
- * Function Definition for calling WMMA GEMM kernel
+ * Function Definition for calling WMMA Naive GEMM kernel
  *
- * @tparam K_TYPE The type of kernel, should be 'kernel_type::shared'
+ * @tparam K_TYPE The type of kernel, should be 'kernel_type::wmma_naive'
  * @param C       Output matrix
  * @param A       Input matrix A
  * @param B       Input matrix B
@@ -175,13 +199,14 @@ __global__ auto kernel_hgemm(half* C, const half* A, const half* B, size_t M, si
  * @param stream  HIP stream to execute kernel
  */
 template<>
-__host__ void hgemm_gpu<kernel_type::wmma>(
+__host__ void hgemm_gpu<kernel_type::wmma_naive>(
     half* C, half* A, half* B, size_t M, size_t N, size_t K, hipStream_t& stream)
 {
-    dim3 block_dim(warpSize * 4, 4);
-    dim3 grid_dim(ceil_div(M, wmma_tile * block_dim.x / warpSize),
+    constexpr int warp_size = 32; // bug on my system where warp size on host side is not 32
+    dim3          block_dim(warp_size * 4, 4);
+    dim3          grid_dim(ceil_div(M, wmma_tile * block_dim.x / warp_size),
                   ceil_div(N, wmma_tile * block_dim.y));
-    kernel_hgemm<kernel_type::wmma><<<grid_dim, block_dim, 0, stream>>>(C, A, B, M, N, K);
+    kernel_hgemm<kernel_type::wmma_naive><<<grid_dim, block_dim, 0, stream>>>(C, A, B, M, N, K);
 }
 
 #endif // HIP_WMMA_RDNA3_HPP
