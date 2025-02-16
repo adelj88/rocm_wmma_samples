@@ -1,3 +1,27 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Adel Johar
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 #include <common/hip_utils.hpp>
 #include <common/matrix.hpp>
 #include <hgemm/hgemm.hpp>
@@ -133,6 +157,8 @@ inline const char* kernel_type_string(kernel_type type)
         case kernel_type::wmma_shared_warp: return "WMMA + Shared Memory + Warp Tiling";
         case kernel_type::wmma_shared_warp_buf:
             return "WMMA + Shared Memory + Warp Tiling + Double Buffering";
+        case kernel_type::wmma_shared_warp_vec:
+            return "WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads";
         case kernel_type::wmma_shared_warp_buf_vec:
             return "WMMA + Shared Memory + Warp Tiling + Double Buffering + Global "
                    "Vectorized Loads";
@@ -190,6 +216,7 @@ int main(int argc, char** argv)
                     kernel_type::wmma_shared,
                     kernel_type::wmma_shared_warp,
                     kernel_type::wmma_shared_warp_buf,
+                    kernel_type::wmma_shared_warp_vec,
                     kernel_type::wmma_shared_warp_buf_vec,
                     kernel_type::wmma_prefetch
 #ifdef HAS_ROCWMMA
