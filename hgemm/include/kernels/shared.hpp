@@ -25,7 +25,7 @@
 #ifndef HIP_SHARED_HPP
 #define HIP_SHARED_HPP
 
-#include <hgemm/kernels/common.hpp>
+#include <kernels/common.hpp>
 
 // Tile size used for shared kernel
 constexpr int shared_tile = 16;

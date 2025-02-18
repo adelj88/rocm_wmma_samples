@@ -26,7 +26,7 @@
 #define HIP_WMMA_RDNA3_HPP
 
 #include <common/matrix.hpp>
-#include <hgemm/kernels/common.hpp>
+#include <kernels/common.hpp>
 
 /**
  * @brief Half-precision GEMM implementation using WMMA (Wave Matrix Multiply-Accumulate) instructions

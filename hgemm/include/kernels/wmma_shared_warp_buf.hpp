@@ -26,7 +26,7 @@
 #define HIP_WMMA_SHARED_WARP_BUF_HPP
 
 #include <common/matrix.hpp>
-#include <hgemm/kernels/common.hpp>
+#include <kernels/common.hpp>
 
 template<>
 struct wmma_config<kernel_type::wmma_shared_warp_buf>
@@ -246,7 +246,7 @@ __global__ auto __launch_bounds__(warpSize * config_wd::total_warps)
         A_tile_ptr += config_wd::block_k * M; // Column-major stride for A
         B_tile_ptr += config_wd::block_k * N; // Row-major stride for B
         current_tile = 1 - current_tile;
-        __syncthreads();
+        //__syncthreads();
     }
 
     // Store results
@@ -257,7 +257,7 @@ __global__ auto __launch_bounds__(warpSize * config_wd::total_warps)
         for(int wn = 0; wn < config_wd::warp_tile_n; wn++)
         {
             const int n_offset = wn * wmma_tile + half_lane;
-
+#pragma unroll
             for(int i = 0; i < wmma_tile / 2; ++i)
             {
                 const int row = i * 2 + half_warp_id;

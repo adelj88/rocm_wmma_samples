@@ -26,17 +26,17 @@
 #define HIP_HGEMM_HPP
 
 #include <common/matrix.hpp>
-#include <hgemm/kernels/rocblas.hpp>
-#include <hgemm/kernels/shared.hpp>
-#include <hgemm/kernels/wmma.hpp>
-#include <hgemm/kernels/wmma_prefetch.hpp>
-#include <hgemm/kernels/wmma_shared.hpp>
-#include <hgemm/kernels/wmma_shared_warp.hpp>
-#include <hgemm/kernels/wmma_shared_warp_buf.hpp>
-#include <hgemm/kernels/wmma_shared_warp_buf_vec.hpp>
-#include <hgemm/kernels/wmma_shared_warp_vec.hpp>
+#include <kernels/rocblas.hpp>
+#include <kernels/shared.hpp>
+#include <kernels/wmma.hpp>
+#include <kernels/wmma_prefetch.hpp>
+#include <kernels/wmma_shared.hpp>
+#include <kernels/wmma_shared_warp.hpp>
+#include <kernels/wmma_shared_warp_buf.hpp>
+#include <kernels/wmma_shared_warp_buf_vec.hpp>
+#include <kernels/wmma_shared_warp_vec.hpp>
 #ifdef HAS_ROCWMMA
-    #include <hgemm/kernels/rocwmma.hpp>
+    #include <kernels/rocwmma.hpp>
 #endif
 
 /**

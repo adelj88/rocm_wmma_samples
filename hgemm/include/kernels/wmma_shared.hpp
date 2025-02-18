@@ -26,7 +26,7 @@
 #define HIP_WMMA_SHARED_HPP
 
 #include <common/matrix.hpp>
-#include <hgemm/kernels/common.hpp>
+#include <kernels/common.hpp>
 
 template<>
 struct wmma_config<kernel_type::wmma_shared>

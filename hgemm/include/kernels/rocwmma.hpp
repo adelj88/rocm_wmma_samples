@@ -26,7 +26,7 @@
 #define HIP_ROCWMMA_HPP
 
 #include <common/matrix.hpp>
-#include <hgemm/kernels/common.hpp>
+#include <kernels/common.hpp>
 #include <rocwmma/rocwmma.hpp>
 #include <rocwmma/rocwmma_coop.hpp>
 #include <rocwmma/rocwmma_transforms.hpp>
@@ -44,7 +44,6 @@ struct wmma_config<kernel_type::rocwmma>
     static constexpr int block_m  = warps_m * warp_tile_m * wmma_tile;
     static constexpr int block_n  = warps_n * warp_tile_n * wmma_tile;
     static constexpr int block_k  = 16;
-    static constexpr int bank_pad = 4;
 };
 
 using config_rocwmma = wmma_config<kernel_type::rocwmma>;
@@ -110,11 +109,11 @@ __global__ auto __launch_bounds__(warpSize * config_rocwmma::total_warps)
 
     // Local write fragment types
     using lw_buff_a = ApplyDataLayout_t<gr_buff_a, col_major>;
-    using lw_buff_b = ApplyDataLayout_t<ApplyTranspose_t<gr_buff_b>, col_major>;
+    using lw_buff_b = ApplyDataLayout_t<gr_buff_b, row_major>;
 
     // Local read fragment types
     using lr_frag_a = ApplyDataLayout_t<mfma_frag_a, col_major>;
-    using lr_frag_b = ApplyDataLayout_t<ApplyTranspose_t<mfma_frag_b>, col_major>;
+    using lr_frag_b = ApplyDataLayout_t<mfma_frag_b, row_major>;
 
     // LDS setup for double buffering
     constexpr uint32_t lds_width  = config_rocwmma::block_k;
@@ -151,7 +150,7 @@ __global__ auto __launch_bounds__(warpSize * config_rocwmma::total_warps)
         lw_buff_a lw_a = applyDataLayout<col_major>(global_a);
         store_matrix_coop_sync<config_rocwmma::total_warps>(lds_mem[0], lw_a, lds_stride, warp_idx);
 
-        lw_buff_b lw_b = applyDataLayout<col_major>(applyTranspose(global_b));
+        lw_buff_b lw_b = applyDataLayout<row_major>(global_b);
         store_matrix_coop_sync<config_rocwmma::total_warps>(
             lds_mem[0] + config_rocwmma::block_m * lds_stride,
             lw_b,
@@ -218,7 +217,7 @@ __global__ auto __launch_bounds__(warpSize * config_rocwmma::total_warps)
                 auto      lds_addr_b = lds_mem[current_buf] + config_rocwmma::block_m * lds_stride
                                   + i * wmma_tile * lds_stride;
                 load_matrix_sync(tmp, lds_addr_b, lds_stride);
-                frags_b[i] = applyDataLayout<row_major>(applyTranspose(tmp));
+                frags_b[i] = applyDataLayout<row_major>(tmp);
             }
         }
 
@@ -239,7 +238,7 @@ __global__ auto __launch_bounds__(warpSize * config_rocwmma::total_warps)
                                                                 lds_stride,
                                                                 warp_idx);
 
-            lw_buff_b lw_b = applyDataLayout<col_major>(applyTranspose(global_b));
+            lw_buff_b lw_b = applyDataLayout<row_major>(global_b);
             store_matrix_coop_sync<config_rocwmma::total_warps>(
                 lds_mem[1 - current_buf] + config_rocwmma::block_m * lds_stride,
                 lw_b,

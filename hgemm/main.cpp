@@ -24,7 +24,7 @@
 
 #include <common/hip_utils.hpp>
 #include <common/matrix.hpp>
-#include <hgemm/hgemm.hpp>
+#include <hgemm.hpp>
 
 template<kernel_type K_TYPE>
 struct layout_selector
@@ -55,7 +55,7 @@ template<>
 struct layout_selector<kernel_type::rocblas>
 {
     static constexpr matrix_layout a_layout = matrix_layout::col_major;
-    static constexpr matrix_layout b_layout = matrix_layout::col_major;
+    static constexpr matrix_layout b_layout = matrix_layout::row_major;
     static constexpr matrix_layout c_layout = matrix_layout::col_major;
 };
 
@@ -203,12 +203,13 @@ void run_kernel_tests(const test_config& config)
 int main(int argc, char** argv)
 {
     test_config config{
-        .verify_sizes    = {{128, 128, 128}},
-        .benchmark_sizes = {{256, 256, 256},
-                            {512, 512, 512},
+        .verify_sizes    = {{128, 128, 128},
+                            {256, 256, 256}},
+        .benchmark_sizes = {{512, 512, 512},
                             {1024, 1024, 1024},
                             {2048, 2048, 2048},
-                            {4096, 4096, 4096}}
+                            {4096, 4096, 4096},
+                            {8192, 8192, 8192}}
     };
 
     run_all_kernels<kernel_type::shared,

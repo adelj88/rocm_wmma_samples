@@ -26,17 +26,17 @@
 #define HIP_WMMA_PREFETCH_HPP
 
 #include <common/matrix.hpp>
-#include <hgemm/kernels/common.hpp>
+#include <kernels/common.hpp>
 
 template<>
 struct wmma_config<kernel_type::wmma_prefetch>
 {
-    static constexpr int warps_m     = 2;
-    static constexpr int warps_n     = 4;
+    static constexpr int warps_m     = 4;
+    static constexpr int warps_n     = 2;
     static constexpr int total_warps = warps_m * warps_n;
 
     static constexpr int warp_tile_m = 4;
-    static constexpr int warp_tile_n = 2;
+    static constexpr int warp_tile_n = 4;
 
     static constexpr int block_m = warps_m * warp_tile_m * wmma_tile;
     static constexpr int block_n = warps_n * warp_tile_n * wmma_tile;
@@ -72,10 +72,10 @@ using config_p = wmma_config<kernel_type::wmma_prefetch>;
  * @param[in]  K  Number of columns in matrix A/rows in matrix B
  *
  * @note Implements double-buffering at global->shared
- * @note Each warp processes a 4×2 grid of 16×16 WMMA tiles
+ * @note Each warp processes a 4×4 grid of 16×16 WMMA tiles
  * @note Uses shared memory tiles of size (block_m × block_k) for A and (block_k × block_n) for B
  * @note Shared memory tiles for A and B use a layout of column-major and row-major
- * @note Employs a 2×4 warp grid configuration within each thread block
+ * @note Employs a 4×2 warp grid configuration within each thread block
  */
 template<kernel_type K_TYPE>
 __global__ auto __launch_bounds__(warpSize * config_p::total_warps)
@@ -352,6 +352,7 @@ __global__ auto __launch_bounds__(warpSize * config_p::total_warps)
         }
 
         // Store prefetched data to shared memory
+        if(k_tile + config_p::block_k < K)
         {
             // Store A registers to shared memory (maintain column-major)
             for(int i = tid; i < total_vectors_a; i += num_threads)
@@ -382,7 +383,7 @@ __global__ auto __launch_bounds__(warpSize * config_p::total_warps)
         A_tile_ptr += config_p::block_k * M; // Column-major stride for A
         B_tile_ptr += config_p::block_k * N; // Row-major stride for B
         current_tile = 1 - current_tile;
-        __syncthreads();
+        //__syncthreads();
     }
 
     // Store results
