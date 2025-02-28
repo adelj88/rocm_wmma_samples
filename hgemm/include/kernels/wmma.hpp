@@ -179,10 +179,9 @@ __device__ inline void store_matrix(half* data, half16& frag, int row, int col, 
  * @param N       Number of columns in matrices B and C
  * @param K       Number of columns in matrix A/rows in matrix B
  */
-template<kernel_type K_TYPE>
-__global__ auto __launch_bounds__(warpSize * 16)
-    kernel_hgemm(half* C, const half* A, const half* B, int M, int N, int K) ->
-    typename std::enable_if<(K_TYPE == kernel_type::wmma_naive), void>::type
+template<>
+__global__ void __launch_bounds__(warpSize * 16) kernel_hgemm<kernel_type::wmma_naive>(
+    half* C, const half* A, const half* B, int M, int N, int K)
 {
     int ix = (blockIdx.x * blockDim.x + threadIdx.x) / warpSize; // Row of tile in C/A
     int iy = blockIdx.y * blockDim.y + threadIdx.y; // Column of tile in C/B

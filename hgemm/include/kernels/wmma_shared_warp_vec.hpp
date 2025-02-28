@@ -74,10 +74,10 @@ using config_wv = wmma_config<kernel_type::wmma_shared_warp_vec>;
  * @note Uses shared memory tiles of size (block_m × block_k) for A and (block_k × block_n) for B
  * @note Employs a 2×4 warp grid configuration within each thread block
  */
-template<kernel_type K_TYPE>
-__global__ auto __launch_bounds__(warpSize * config_wv::total_warps)
-    kernel_hgemm(half* C, const half* A, const half* B, int M, int N, int K) ->
-    typename std::enable_if<(K_TYPE == kernel_type::wmma_shared_warp_vec), void>::type
+template<>
+__global__ void __launch_bounds__(warpSize * config_wv::total_warps)
+    kernel_hgemm<kernel_type::wmma_shared_warp_vec>(
+        half* C, const half* A, const half* B, int M, int N, int K)
 {
     using vector_type       = typename config_wv::vector_type;
     constexpr int vec_width = config_wv::vector_width;

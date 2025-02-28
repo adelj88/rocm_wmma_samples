@@ -50,10 +50,9 @@ constexpr int shared_tile = 16;
  * @note Matrix B is expected to be in column-major format for coalesced memory access
  * @note Each thread block processes one tile of the output matrix C
  */
-template<kernel_type K_TYPE>
-__global__ auto __launch_bounds__(shared_tile * shared_tile)
-    kernel_hgemm(half* C, const half* A, const half* B, int M, int N, int K) ->
-    typename std::enable_if<(K_TYPE == kernel_type::shared), void>::type
+template<>
+__global__ void __launch_bounds__(shared_tile * shared_tile)
+    kernel_hgemm<kernel_type::shared>(half* C, const half* A, const half* B, int M, int N, int K)
 {
     __shared__ half a_tile[shared_tile][shared_tile]; // Shared memory for tiles of matrix A
     __shared__ half b_tile[shared_tile][shared_tile]; // Shared memory for tiles of matrix B

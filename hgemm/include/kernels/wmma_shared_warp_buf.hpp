@@ -40,7 +40,7 @@ struct wmma_config<kernel_type::wmma_shared_warp_buf>
 
     static constexpr int block_m = warps_m * warp_tile_m * wmma_tile;
     static constexpr int block_n = warps_n * warp_tile_n * wmma_tile;
-    static constexpr int block_k = 16;
+    static constexpr int block_k = wmma_tile;
 
     // Shared memory layout
     static constexpr int lds_width  = block_k;
@@ -71,10 +71,10 @@ using config_wd = wmma_config<kernel_type::wmma_shared_warp_buf>;
  * @note Uses shared memory tiles of size (block_m × block_k) for A and (block_k × block_n) for B
  * @note Employs a 2×4 warp grid configuration within each thread block
  */
-template<kernel_type K_TYPE>
-__global__ auto __launch_bounds__(warpSize * config_wd::total_warps)
-    kernel_hgemm(half* C, const half* A, const half* B, int M, int N, int K) ->
-    typename std::enable_if<(K_TYPE == kernel_type::wmma_shared_warp_buf), void>::type
+template<>
+__global__ void __launch_bounds__(warpSize * config_wd::total_warps)
+    kernel_hgemm<kernel_type::wmma_shared_warp_buf>(
+        half* C, const half* A, const half* B, int M, int N, int K)
 {
     // Single unified shared memory buffer
     __shared__ half lds_mem[2][config_wd::lds_size];
@@ -153,9 +153,9 @@ __global__ auto __launch_bounds__(warpSize * config_wd::total_warps)
         if(k_tile + config_wd::block_k < K)
         {
             // Load next tiles into the opposite buffer
-            half* next_a_tile = &lds_mem[1 - current_tile][0];
+            half* next_a_tile = &lds_mem[current_tile ^ 1][0];
             half* next_b_tile
-                = &lds_mem[1 - current_tile][config_wd::block_m * config_wd::lds_stride];
+                = &lds_mem[current_tile ^ 1][0] + config_wd::block_m * config_wd::lds_stride;
             const half* A_next = A_tile_ptr + (k_tile + config_wd::block_k) * M;
             const half* B_next = B_tile_ptr + (k_tile + config_wd::block_k) * N;
 
@@ -195,57 +195,52 @@ __global__ auto __launch_bounds__(warpSize * config_wd::total_warps)
         // Pre-calculate shared memory base pointers for current tile
         const half* const a_base_ptr = &lds_mem[current_tile][0];
         const half* const b_base_ptr
-            = &lds_mem[current_tile][config_wd::block_m * config_wd::lds_stride];
+            = &lds_mem[current_tile][0] + config_wd::block_m * config_wd::lds_stride;
 
-        // Process K-dimension
-        for(int k = 0; k < config_wd::block_k; k += wmma_tile)
+        // Process
+        // For A (column-major loading)
+        for(int wm = 0; wm < config_wd::warp_tile_m; ++wm)
         {
-            // For A (column-major loading)
-            for(int wm = 0; wm < config_wd::warp_tile_m; ++wm)
-            {
-                const half* src = a_base_ptr + k * config_wd::lds_stride
-                                  + (warp_m_base + wm * wmma_tile + half_lane);
-                half* dest = reinterpret_cast<half*>(&a_frag[wm]);
+            const half* src  = a_base_ptr + (warp_m_base + wm * wmma_tile + half_lane);
+            half*       dest = reinterpret_cast<half*>(&a_frag[wm]);
 
 #pragma unroll
-                for(int i = 0; i < wmma_tile; ++i)
-                {
-                    *dest++ = *src;
-                    src += config_wd::lds_stride; // Move down column
-                }
-            }
-
-            // For B (row-major loading)
-            for(int wn = 0; wn < config_wd::warp_tile_n; ++wn)
+            for(int i = 0; i < wmma_tile; ++i)
             {
-                const half* src = b_base_ptr + k * config_wd::lds_stride
-                                  + (warp_n_base + wn * wmma_tile + half_lane);
-                half* dest = reinterpret_cast<half*>(&b_frag[wn]);
-
-#pragma unroll
-                for(int i = 0; i < wmma_tile; ++i)
-                {
-                    *dest++ = *src;
-                    src += config_wd::lds_stride;
-                }
-            }
-
-            // Compute matrix multiplication
-            for(int wm = 0; wm < config_wd::warp_tile_m; ++wm)
-            {
-                for(int wn = 0; wn < config_wd::warp_tile_n; ++wn)
-                {
-                    c_frags[wm][wn] = __builtin_amdgcn_wmma_f16_16x16x16_f16_w32(a_frag[wm],
-                                                                                 b_frag[wn],
-                                                                                 c_frags[wm][wn],
-                                                                                 false);
-                }
+                *dest++ = *src;
+                src += config_wd::lds_stride; // Move down column
             }
         }
 
-        A_tile_ptr += config_wd::block_k * M; // Column-major stride for A
-        B_tile_ptr += config_wd::block_k * N; // Row-major stride for B
-        current_tile = 1 - current_tile;
+        // For B (row-major loading)
+        for(int wn = 0; wn < config_wd::warp_tile_n; ++wn)
+        {
+            const half* src  = b_base_ptr + (warp_n_base + wn * wmma_tile + half_lane);
+            half*       dest = reinterpret_cast<half*>(&b_frag[wn]);
+
+#pragma unroll
+            for(int i = 0; i < wmma_tile; ++i)
+            {
+                *dest++ = *src;
+                src += config_wd::lds_stride;
+            }
+        }
+
+        // Compute matrix multiplication
+        for(int wm = 0; wm < config_wd::warp_tile_m; ++wm)
+        {
+            for(int wn = 0; wn < config_wd::warp_tile_n; ++wn)
+            {
+                c_frags[wm][wn] = __builtin_amdgcn_wmma_f16_16x16x16_f16_w32(a_frag[wm],
+                                                                             b_frag[wn],
+                                                                             c_frags[wm][wn],
+                                                                             false);
+            }
+        }
+
+        A_tile_ptr += M * config_wd::block_k; // Column-major stride for A
+        B_tile_ptr += N * config_wd::block_k; // Row-major stride for B
+        current_tile ^= 1;
         //__syncthreads();
     }
 

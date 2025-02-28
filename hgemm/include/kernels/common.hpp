@@ -68,7 +68,7 @@ struct wmma_config;
  * @param K       Number of columns in matrix A/rows in matrix B
  */
 template<kernel_type K_TYPE>
-__global__ auto kernel_hgemm(half* C, const half* A, const half* B, int M, int N, int K);
+__global__ void kernel_hgemm(half* C, const half* A, const half* B, int M, int N, int K);
 
 /**
  * @brief Calculate ceiling division of two integers

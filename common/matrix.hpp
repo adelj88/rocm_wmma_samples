@@ -185,7 +185,7 @@ void init_matrix(T* matrix, size_t size)
 {
     std::random_device                    rd;
     std::mt19937                          gen(rd());
-    std::uniform_real_distribution<float> dis(0.0f, 1.0f);
+    std::uniform_real_distribution<float> dis(0.1f, 1.0f);
 
     for(size_t i = 0; i < size; ++i)
     {

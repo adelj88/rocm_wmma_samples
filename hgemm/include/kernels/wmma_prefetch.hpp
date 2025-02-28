@@ -40,7 +40,7 @@ struct wmma_config<kernel_type::wmma_prefetch>
 
     static constexpr int block_m = warps_m * warp_tile_m * wmma_tile;
     static constexpr int block_n = warps_n * warp_tile_n * wmma_tile;
-    static constexpr int block_k = 16;
+    static constexpr int block_k = wmma_tile;
 
     // Shared memory layout
     static constexpr int lds_width  = block_k;
@@ -77,10 +77,10 @@ using config_p = wmma_config<kernel_type::wmma_prefetch>;
  * @note Shared memory tiles for A and B use a layout of column-major and row-major
  * @note Employs a 4×2 warp grid configuration within each thread block
  */
-template<kernel_type K_TYPE>
-__global__ auto __launch_bounds__(warpSize * config_p::total_warps)
-    kernel_hgemm(half* C, const half* A, const half* B, int M, int N, int K) ->
-    typename std::enable_if<(K_TYPE == kernel_type::wmma_prefetch), void>::type
+template<>
+__global__ void
+    __launch_bounds__(warpSize * config_p::total_warps) kernel_hgemm<kernel_type::wmma_prefetch>(
+        half* C, const half* A, const half* B, int M, int N, int K)
 {
     using vector_type       = typename config_p::vector_type;
     constexpr int vec_width = config_p::vector_width;
@@ -122,9 +122,9 @@ __global__ auto __launch_bounds__(warpSize * config_p::total_warps)
     vector_type a_reg_buf[max_vectors_per_thread_a];
     vector_type b_reg_buf[max_vectors_per_thread_b];
 
-    half16 c_frags[config_p::warp_tile_m][config_p::warp_tile_n]        = {};
-    half16 a_frag[config_p::block_k / wmma_tile][config_p::warp_tile_m] = {};
-    half16 b_frag[config_p::block_k / wmma_tile][config_p::warp_tile_n] = {};
+    half16 c_frags[config_p::warp_tile_m][config_p::warp_tile_n] = {};
+    half16 a_frag[config_p::warp_tile_m]                         = {};
+    half16 b_frag[config_p::warp_tile_n]                         = {};
 
     // Initial load to registers
     {
@@ -225,43 +225,36 @@ __global__ auto __launch_bounds__(warpSize * config_p::total_warps)
 
     for(int k_tile = 0; k_tile < K; k_tile += config_p::block_k)
     {
-        const half* const a_base_ptr = &lds_mem[current_tile][0];
-        const half* const b_base_ptr
-            = &lds_mem[current_tile][config_p::block_m * config_p::lds_stride];
+        const half* a_base_ptr = &lds_mem[current_tile][0];
+        const half* b_base_ptr
+            = &lds_mem[current_tile][0] + config_p::block_m * config_p::lds_stride;
 
         // Load fragments
-        for(int k = 0; k < config_p::block_k; k += wmma_tile)
+        // For A (column-major loading)
+        for(int wm = 0; wm < config_p::warp_tile_m; ++wm)
         {
-            int frag = k / wmma_tile;
-
-            // For A (column-major loading)
-            for(int wm = 0; wm < config_p::warp_tile_m; ++wm)
-            {
-                const half* src = a_base_ptr + k * config_p::lds_stride
-                                  + (warp_m_base + wm * wmma_tile + half_lane);
-                half* dest = reinterpret_cast<half*>(&a_frag[frag][wm]);
+            const half* src  = a_base_ptr + (warp_m_base + wm * wmma_tile + half_lane);
+            half*       dest = reinterpret_cast<half*>(&a_frag[wm]);
 
 #pragma unroll
-                for(int i = 0; i < wmma_tile; ++i)
-                {
-                    *dest++ = *src;
-                    src += config_p::lds_stride; // Move down column
-                }
+            for(int i = 0; i < wmma_tile; ++i)
+            {
+                *dest++ = *src;
+                src += config_p::lds_stride; // Move down column
             }
+        }
 
-            // For B (row-major loading)
-            for(int wn = 0; wn < config_p::warp_tile_n; ++wn)
-            {
-                const half* src = b_base_ptr + k * config_p::lds_stride
-                                  + (warp_n_base + wn * wmma_tile + half_lane);
-                half* dest = reinterpret_cast<half*>(&b_frag[frag][wn]);
+        // For B (row-major loading)
+        for(int wn = 0; wn < config_p::warp_tile_n; ++wn)
+        {
+            const half* src  = b_base_ptr + (warp_n_base + wn * wmma_tile + half_lane);
+            half*       dest = reinterpret_cast<half*>(&b_frag[wn]);
 
 #pragma unroll
-                for(int i = 0; i < wmma_tile; ++i)
-                {
-                    *dest++ = *src;
-                    src += config_p::lds_stride; // Move by N-sized stride
-                }
+            for(int i = 0; i < wmma_tile; ++i)
+            {
+                *dest++ = *src;
+                src += config_p::lds_stride; // Move by N-sized stride
             }
         }
 
@@ -336,18 +329,14 @@ __global__ auto __launch_bounds__(warpSize * config_p::total_warps)
         }
 
         // Compute matrix multiplication
-        for(int k = 0; k < config_p::block_k; k += wmma_tile)
+        for(int wm = 0; wm < config_p::warp_tile_m; ++wm)
         {
-            int frag = k / wmma_tile;
-            for(int wm = 0; wm < config_p::warp_tile_m; ++wm)
+            for(int wn = 0; wn < config_p::warp_tile_n; ++wn)
             {
-                for(int wn = 0; wn < config_p::warp_tile_n; ++wn)
-                {
-                    c_frags[wm][wn] = __builtin_amdgcn_wmma_f16_16x16x16_f16_w32(a_frag[frag][wm],
-                                                                                 b_frag[frag][wn],
-                                                                                 c_frags[wm][wn],
-                                                                                 false);
-                }
+                c_frags[wm][wn] = __builtin_amdgcn_wmma_f16_16x16x16_f16_w32(a_frag[wm],
+                                                                             b_frag[wn],
+                                                                             c_frags[wm][wn],
+                                                                             false);
             }
         }
 
@@ -362,7 +351,7 @@ __global__ auto __launch_bounds__(warpSize * config_p::total_warps)
                 const int local_idx = i / num_threads;
 
                 vector_type* dest_ptr = reinterpret_cast<vector_type*>(
-                    &lds_mem[1 - current_tile][0] + col * config_p::lds_stride + row);
+                    &lds_mem[current_tile ^ 1][0] + col * config_p::lds_stride + row);
                 *dest_ptr = a_reg_buf[local_idx];
             }
 
@@ -374,15 +363,15 @@ __global__ auto __launch_bounds__(warpSize * config_p::total_warps)
                 const int local_idx = i / num_threads;
 
                 vector_type* dest_ptr = reinterpret_cast<vector_type*>(
-                    &lds_mem[1 - current_tile][config_p::block_m * config_p::lds_stride]
+                    &lds_mem[current_tile ^ 1][0] + config_p::block_m * config_p::lds_stride
                     + row * config_p::lds_stride + col);
                 *dest_ptr = b_reg_buf[local_idx];
             }
         }
 
-        A_tile_ptr += config_p::block_k * M; // Column-major stride for A
-        B_tile_ptr += config_p::block_k * N; // Row-major stride for B
-        current_tile = 1 - current_tile;
+        A_tile_ptr += M * config_p::block_k; // Column-major stride for A
+        B_tile_ptr += N * config_p::block_k; // Row-major stride for B
+        current_tile ^= 1;
         //__syncthreads();
     }
 

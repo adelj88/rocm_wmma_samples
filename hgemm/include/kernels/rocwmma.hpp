@@ -41,9 +41,9 @@ struct wmma_config<kernel_type::rocwmma>
     static constexpr int warp_tile_m = 4;
     static constexpr int warp_tile_n = 2;
 
-    static constexpr int block_m  = warps_m * warp_tile_m * wmma_tile;
-    static constexpr int block_n  = warps_n * warp_tile_n * wmma_tile;
-    static constexpr int block_k  = 16;
+    static constexpr int block_m = warps_m * warp_tile_m * wmma_tile;
+    static constexpr int block_n = warps_n * warp_tile_n * wmma_tile;
+    static constexpr int block_k = 16;
 };
 
 using config_rocwmma = wmma_config<kernel_type::rocwmma>;
@@ -68,10 +68,10 @@ using config_rocwmma = wmma_config<kernel_type::rocwmma>;
  * @note Uses shared memory tiles of size (block_m × block_k) for A and (block_k × block_n) for B
  * @note Employs a 2×4 warp grid configuration within each thread block
  */
-template<kernel_type k_type>
-__global__ auto __launch_bounds__(warpSize * config_rocwmma::total_warps)
-    kernel_hgemm(half* c_out, const half* a_in, const half* b_in, int m, int n, int k) ->
-    typename std::enable_if<(k_type == kernel_type::rocwmma), void>::type
+template<>
+__global__ void
+    __launch_bounds__(warpSize * config_rocwmma::total_warps) kernel_hgemm<kernel_type::rocwmma>(
+        half* c_out, const half* a_in, const half* b_in, int m, int n, int k)
 {
     using namespace rocwmma;
 

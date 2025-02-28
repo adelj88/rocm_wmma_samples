@@ -68,10 +68,10 @@ using config_s = wmma_config<kernel_type::wmma_shared>;
  * @note Employs a 4×4 warp grid configuration for better occupancy
  * @note Each block processes a 64×64 tile of the output matrix
  */
-template<kernel_type K_TYPE>
-__global__ auto __launch_bounds__(warpSize* config_s::total_warps)
-    kernel_hgemm(half* C, const half* A, const half* B, int M, int N, int K) ->
-    typename std::enable_if<(K_TYPE == kernel_type::wmma_shared), void>::type
+template<>
+__global__ void
+    __launch_bounds__(warpSize * config_s::total_warps) kernel_hgemm<kernel_type::wmma_shared>(
+        half* C, const half* A, const half* B, int M, int N, int K)
 {
     // Single unified shared memory buffer
     __shared__ half lds_mem[config_s::lds_size];

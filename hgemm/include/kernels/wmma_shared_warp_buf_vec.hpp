@@ -40,7 +40,7 @@ struct wmma_config<kernel_type::wmma_shared_warp_buf_vec>
 
     static constexpr int block_m = warps_m * warp_tile_m * wmma_tile;
     static constexpr int block_n = warps_n * warp_tile_n * wmma_tile;
-    static constexpr int block_k = 16;
+    static constexpr int block_k = wmma_tile;
 
     // Shared memory layout
     static constexpr int lds_width  = block_k;
@@ -75,10 +75,10 @@ using config_wdo = wmma_config<kernel_type::wmma_shared_warp_buf_vec>;
  * @note Uses shared memory tiles of size (block_m × block_k) for A and (block_k × block_n) for B
  * @note Employs a 2×2 warp grid configuration within each thread block
  */
-template<kernel_type K_TYPE>
-__global__ auto __launch_bounds__(warpSize * config_wdo::total_warps)
-    kernel_hgemm(half* C, const half* A, const half* B, int M, int N, int K) ->
-    typename std::enable_if<(K_TYPE == kernel_type::wmma_shared_warp_buf_vec), void>::type
+template<>
+__global__ void __launch_bounds__(warpSize * config_wdo::total_warps)
+    kernel_hgemm<kernel_type::wmma_shared_warp_buf_vec>(
+        half* C, const half* A, const half* B, int M, int N, int K)
 {
     using vector_type       = typename config_wdo::vector_type;
     constexpr int vec_width = config_wdo::vector_width;
@@ -90,8 +90,8 @@ __global__ auto __launch_bounds__(warpSize * config_wdo::total_warps)
     half* a_tiles = &lds_mem[0][0];
     half* b_tiles = &lds_mem[0][config_wdo::block_m * config_wdo::lds_stride];
 
-    const int tid         = threadIdx.y * blockDim.x + threadIdx.x;
-    const int num_threads = blockDim.x * blockDim.y;
+    const int tid         = threadIdx.x;
+    const int num_threads = blockDim.x;
 
     const int block_row = blockIdx.x * config_wdo::block_m;
     const int block_col = blockIdx.y * config_wdo::block_n;
@@ -100,14 +100,16 @@ __global__ auto __launch_bounds__(warpSize * config_wdo::total_warps)
     const half* B_base = B + block_col;
     half*       C_base = C + block_row * N + block_col;
 
-    const int warp_row    = threadIdx.x / warpSize;
-    const int warp_col    = threadIdx.y;
+    const int warp_id  = tid / warpSize;
+    const int warp_row = warp_id % config_wdo::warps_m;
+    const int warp_col = warp_id / config_wdo::warps_m;
+
     const int warp_m_base = warp_row * config_wdo::warp_tile_m * wmma_tile;
     const int warp_n_base = warp_col * config_wdo::warp_tile_n * wmma_tile;
 
     constexpr int half_warp    = warpSize / 2;
-    const int     half_warp_id = (threadIdx.x % warpSize) / half_warp;
-    const int     half_lane    = threadIdx.x % half_warp;
+    const int     half_warp_id = (tid % warpSize) / half_warp;
+    const int     half_lane    = tid % half_warp;
 
     half16 c_frags[config_wdo::warp_tile_m][config_wdo::warp_tile_n] = {};
     half16 a_frag[config_wdo::warp_tile_m]                           = {};
@@ -187,61 +189,45 @@ __global__ auto __launch_bounds__(warpSize * config_wdo::total_warps)
 
     for(int k_tile = 0; k_tile < K; k_tile += config_wdo::block_k)
     {
-        const half* const a_base_ptr = &lds_mem[current_tile][0];
-        const half* const b_base_ptr
-            = &lds_mem[current_tile][config_wdo::block_m * config_wdo::lds_stride];
+        const half* a_base_ptr = &lds_mem[current_tile][0];
+        const half* b_base_ptr
+            = &lds_mem[current_tile][0] + config_wdo::block_m * config_wdo::lds_stride;
 
         // Load fragments
-        for(int k = 0; k < config_wdo::block_k; k += wmma_tile)
+        // For A (column-major loading)
+        for(int wm = 0; wm < config_wdo::warp_tile_m; ++wm)
         {
-            // For A (column-major loading)
-            for(int wm = 0; wm < config_wdo::warp_tile_m; ++wm)
-            {
-                const half* src = a_base_ptr + k * config_wdo::lds_stride
-                                  + (warp_m_base + wm * wmma_tile + half_lane);
-                half* dest = reinterpret_cast<half*>(&a_frag[wm]);
+            const half* src  = a_base_ptr + (warp_m_base + wm * wmma_tile + half_lane);
+            half*       dest = reinterpret_cast<half*>(&a_frag[wm]);
 
 #pragma unroll
-                for(int i = 0; i < wmma_tile; ++i)
-                {
-                    *dest++ = *src;
-                    src += config_wdo::lds_stride; // Move down column
-                }
-            }
-
-            // For B (row-major loading)
-            for(int wn = 0; wn < config_wdo::warp_tile_n; ++wn)
+            for(int i = 0; i < wmma_tile; ++i)
             {
-                const half* src = b_base_ptr + k * config_wdo::lds_stride
-                                  + (warp_n_base + wn * wmma_tile + half_lane);
-                half* dest = reinterpret_cast<half*>(&b_frag[wn]);
+                *dest++ = *src;
+                src += config_wdo::lds_stride; // Move down column
+            }
+        }
+
+        // For B (row-major loading)
+        for(int wn = 0; wn < config_wdo::warp_tile_n; ++wn)
+        {
+            const half* src  = b_base_ptr + (warp_n_base + wn * wmma_tile + half_lane);
+            half*       dest = reinterpret_cast<half*>(&b_frag[wn]);
 
 #pragma unroll
-                for(int i = 0; i < wmma_tile; ++i)
-                {
-                    *dest++ = *src;
-                    src += config_wdo::lds_stride;
-                }
-            }
-
-            for(int wm = 0; wm < config_wdo::warp_tile_m; ++wm)
+            for(int i = 0; i < wmma_tile; ++i)
             {
-                for(int wn = 0; wn < config_wdo::warp_tile_n; ++wn)
-                {
-                    c_frags[wm][wn] = __builtin_amdgcn_wmma_f16_16x16x16_f16_w32(a_frag[wm],
-                                                                                 b_frag[wn],
-                                                                                 c_frags[wm][wn],
-                                                                                 false);
-                }
+                *dest++ = *src;
+                src += config_wdo::lds_stride;
             }
         }
 
         if(k_tile + config_wdo::block_k < K)
         {
             // Load next tiles into the opposite buffer
-            half* next_a_tile = &lds_mem[1 - current_tile][0];
+            half* next_a_tile = &lds_mem[current_tile ^ 1][0];
             half* next_b_tile
-                = &lds_mem[1 - current_tile][config_wdo::block_m * config_wdo::lds_stride];
+                = &lds_mem[current_tile ^ 1][0] + config_wdo::block_m * config_wdo::lds_stride;
             const half* A_next = A_tile_ptr + (k_tile + config_wdo::block_k) * M;
             const half* B_next = B_tile_ptr + (k_tile + config_wdo::block_k) * N;
 
@@ -314,9 +300,20 @@ __global__ auto __launch_bounds__(warpSize * config_wdo::total_warps)
             }
         }
 
-        A_tile_ptr += config_wdo::block_k * M; // Column-major stride for A
-        B_tile_ptr += config_wdo::block_k * N; // Row-major stride for B
-        current_tile = 1 - current_tile;
+        for(int wm = 0; wm < config_wdo::warp_tile_m; ++wm)
+        {
+            for(int wn = 0; wn < config_wdo::warp_tile_n; ++wn)
+            {
+                c_frags[wm][wn] = __builtin_amdgcn_wmma_f16_16x16x16_f16_w32(a_frag[wm],
+                                                                             b_frag[wn],
+                                                                             c_frags[wm][wn],
+                                                                             false);
+            }
+        }
+
+        A_tile_ptr += M * config_wdo::block_k; // Column-major stride for A
+        B_tile_ptr += N * config_wdo::block_k; // Row-major stride for B
+        current_tile ^= 1;
         //__syncthreads();
     }
 
@@ -359,7 +356,7 @@ __host__ void hgemm_gpu<kernel_type::wmma_shared_warp_buf_vec>(
     half* C, half* A, half* B, size_t M, size_t N, size_t K, hipStream_t& stream)
 {
     constexpr int warp_size = 32;
-    dim3          block_dim(warp_size * config_wdo::warps_m, config_wdo::warps_n);
+    dim3          block_dim(warp_size * config_wdo::total_warps);
     dim3          grid_dim(ceil_div(M, config_wdo::block_m), ceil_div(N, config_wdo::block_n));
 
     kernel_hgemm<kernel_type::wmma_shared_warp_buf_vec>

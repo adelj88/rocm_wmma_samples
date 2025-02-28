@@ -72,17 +72,17 @@ using config_w = wmma_config<kernel_type::wmma_shared_warp>;
  * @note Uses shared memory tiles of size (block_m × block_k) for A and (block_k × block_n) for B
  * @note Employs a 2×4 warp grid configuration within each thread block
  */
-template<kernel_type K_TYPE>
-__global__ auto __launch_bounds__(warpSize * config_w::total_warps)
-    kernel_hgemm(half* C, const half* A, const half* B, int M, int N, int K) ->
-    typename std::enable_if<(K_TYPE == kernel_type::wmma_shared_warp), void>::type
+template<>
+__global__ void
+    __launch_bounds__(warpSize * config_w::total_warps) kernel_hgemm<kernel_type::wmma_shared_warp>(
+        half* C, const half* A, const half* B, int M, int N, int K)
 {
     // Single unified shared memory buffer
-    __shared__ half lds_mem[config_wd::lds_size];
+    __shared__ half lds_mem[config_w::lds_size];
 
     // Create pointers for A and B regions
     half* a_tiles = &lds_mem[0];
-    half* b_tiles = &lds_mem[config_wd::block_m * config_wd::lds_stride];
+    half* b_tiles = &lds_mem[config_w::block_m * config_w::lds_stride];
 
     const int tid         = threadIdx.y * blockDim.y + threadIdx.x;
     const int num_threads = blockDim.x * blockDim.y;
@@ -194,7 +194,6 @@ __global__ auto __launch_bounds__(warpSize * config_w::total_warps)
                                                                                  b_frag,
                                                                                  c_frags[wm][wn],
                                                                                  false);
-
                 }
             }
         }

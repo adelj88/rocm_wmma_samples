@@ -30,7 +30,7 @@ An exploration of the RDNA3 Wave Matrix Multiply-Accumulate (WMMA) intrinsic, de
    ```bash
    mkdir build
    cd build
-   cmake ..
+   CXX=/opt/rocm/bin/hipcc cmake ..
    make
    ```
 
