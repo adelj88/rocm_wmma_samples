@@ -29,6 +29,7 @@
 #include <kernels/rocblas.hpp>
 #include <kernels/shared.hpp>
 #include <kernels/wmma.hpp>
+#include <kernels/wmma_decoupled.hpp>
 #include <kernels/wmma_prefetch.hpp>
 #include <kernels/wmma_shared.hpp>
 #include <kernels/wmma_shared_warp.hpp>
