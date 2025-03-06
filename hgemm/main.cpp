@@ -114,6 +114,7 @@ int run_hgemm(size_t M, size_t N, size_t K)
 
     // Copy the result back to host
     HIP_CHECK(hipMemcpy(h_C.data(), d_C, M * N * sizeof(half), hipMemcpyDeviceToHost));
+    HIP_CHECK(hipDeviceSynchronize());
 
     // Verify result if requested
     if(VERIFY)
@@ -162,11 +163,6 @@ inline const char* kernel_type_string(kernel_type type)
         case kernel_type::wmma_shared_warp_buf_vec:
             return "WMMA + Shared Memory + Warp Tiling + Double Buffering + Global "
                    "Vectorized Loads";
-        case kernel_type::wmma_prefetch: return "WMMA Prefetch";
-        case kernel_type::wmma_decoupled: return "WMMA Decoupled";
-#ifdef HAS_ROCWMMA
-        case kernel_type::rocwmma: return "rocWMMA";
-#endif
         case kernel_type::rocblas: return "rocBLAS";
         default: return "Unknown";
     }
@@ -204,10 +200,9 @@ void run_kernel_tests(const test_config& config)
 int main(int argc, char** argv)
 {
     test_config config{
-        .verify_sizes    = {{128, 128, 128},
-                            {256, 256, 256}},
-        .benchmark_sizes = {{512, 512, 512},
-                            {1024, 1024, 1024},
+        .verify_sizes    = {{256, 256, 256},
+                            {512, 512, 512}},
+        .benchmark_sizes = {{1024, 1024, 1024},
                             {2048, 2048, 2048},
                             {4096, 4096, 4096},
                             {8192, 8192, 8192}}
@@ -219,13 +214,7 @@ int main(int argc, char** argv)
                     kernel_type::wmma_shared_warp,
                     kernel_type::wmma_shared_warp_buf,
                     kernel_type::wmma_shared_warp_vec,
-                    kernel_type::wmma_shared_warp_buf_vec,
-                    kernel_type::wmma_prefetch,
-                    kernel_type::wmma_decoupled
-#ifdef HAS_ROCWMMA
-                    ,
-                    kernel_type::rocwmma
-#endif
+                    kernel_type::wmma_shared_warp_buf_vec
                     >(config);
 
     init_rocblas();

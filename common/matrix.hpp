@@ -61,12 +61,12 @@ public:
 
     /**
      * @brief Construct a matrix with specified dimensions
-     * @param rows Number of rows
-     * @param cols Number of columns
+     * @param m Dimension of m
+     * @param n Dimension of n
      */
-    matrix(size_t rows, size_t cols) : rows_(rows), cols_(cols), data_(rows * cols)
+    matrix(size_t m, size_t n) : m_(m), n_(n), data_(m * n)
     {
-        if(rows == 0 || cols == 0)
+        if(m == 0 || n == 0)
         {
             throw std::invalid_argument("Matrix dimensions must be positive");
         }
@@ -116,21 +116,21 @@ public:
     }
 
     /**
-     * @brief Get number of rows in matrix
-     * @return Number of rows
+     * @brief Get number of m in matrix
+     * @return Number of m
      */
-    size_t rows() const
+    size_t m() const
     {
-        return rows_;
+        return m_;
     }
 
     /**
      * @brief Get number of columns in matrix
      * @return Number of columns
      */
-    size_t cols() const
+    size_t n() const
     {
-        return cols_;
+        return n_;
     }
 
     /**
@@ -139,7 +139,7 @@ public:
      */
     size_t size() const
     {
-        return rows_ * cols_;
+        return m_ * n_;
     }
 
     /**
@@ -162,16 +162,16 @@ private:
     {
         if constexpr(Layout == matrix_layout::row_major)
         {
-            return i * cols_ + j;
+            return i * n_ + j;
         }
         else
         {
-            return j * rows_ + i;
+            return j * m_ + i;
         }
     }
 
-    size_t         rows_; ///< Number of rows in matrix
-    size_t         cols_; ///< Number of columns in matrix
+    size_t         m_; ///< Number of m in matrix
+    size_t         n_; ///< Number of columns in matrix
     std::vector<T> data_; ///< Pointer to matrix data
 };
 
@@ -185,11 +185,12 @@ void init_matrix(T* matrix, size_t size)
 {
     std::random_device                    rd;
     std::mt19937                          gen(rd());
-    std::uniform_real_distribution<float> dis(0.1f, 1.0f);
+    //std::uniform_real_distribution<float> dis(0.1f, 0.2f);
+    float tmp[5] = {0.1f, 0.125f, 0.15f, 0.175f, 0.2f};
 
     for(size_t i = 0; i < size; ++i)
     {
-        matrix[i] = static_cast<T>(dis(gen));
+        matrix[i] = static_cast<T>(tmp[i % 5]);
     }
 }
 

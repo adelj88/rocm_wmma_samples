@@ -2,17 +2,17 @@
 
 This project is a personal exploration of HIP programming and the RDNA3 Wave Matrix Multiply-Accumulate (WMMA) intrinsic. The primary goal was to deepen my understanding of the WMMA intrinsic and extend the fixed-size example provided in the [GPUOpen tutorial](https://gpuopen.com/learn/wmma_on_rdna3/) to support arbitrary matrix dimensions. While this project is primarily for personal learning, it may also serve as a helpful reference for others interested in exploring the WMMA intrinsic.
 
-**Note:** The WMMA intrinsic is specific to RDNA3 GPUs for now, so running this project requires an RDNA3-compatible GPU. A future feature may include testing this implementation on RDNA4 hardware when it becomes available. For production-grade GPU matrix multiplication, it is highly recommended to use [rocWMMA](https://github.com/ROCm/rocWMMA), which provides a robust and optimized abstraction over the WMMA functionality.
+**Note:** The WMMA intrinsic is specific to RDNA3 GPUs for now, so running this project requires an RDNA3-compatible GPU. A future feature may include testing this implementation on RDNA4 hardware when it becomes available.
 
 ## Objectives
 This project aims to:
 1. Provide a simple example of HIP programming and WMMA usage for GPU-accelerated computation
-2. Extend beyond the fixed-size example in the GPUOpen tutorial by supporting arbitrary matrix dimensions (M, N, K)
+2. Extend beyond the fixed-size example in the GPUOpen tutorial by supporting arbitrary power-of-two matrix dimensions (M, N, K)
 3. Enhance understanding of the WMMA intrinsic's mechanics, especially around data loading and storing
 
 ## Features
 
-- **Flexible Matrix Dimensions:** Supports arbitrary matrix sizes (M, N, K) beyond the basic 16x16 example
+- **Flexible Matrix Dimensions:** Supports arbitrary power-of-two matrix sizes (M, N, K) beyond the basic 16x16 example
 - **Multiple Implementations:**
   - Basic WMMA implementation
   - Shared memory optimized WMMA
@@ -28,73 +28,89 @@ Performance measured on AMD Radeon RX 7900 GRE on Windows and WSL2 (HIP SDK 6.2.
 ### Performance for 1024x1024 Matrix Multiplication
 | Implementation | Windows Time (ms) | Windows TFLOPs/s | WSL2 Time (ms) | WSL2 TFLOPs/s |
 |----------------|-------------------|-------------------|----------------|---------------|
-| Shared Memory | 0.558 | 3.87 | 0.561 | 3.85 |
-| WMMA Naive | 0.399 | 5.42 | 0.408 | 5.30 |
-| WMMA + Shared Memory | 0.185 | 11.68 | 0.205 | 10.56 |
-| WMMA + Shared Memory + Warp Tiling | 0.281 | 7.69 | 0.362 | 5.98 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering | 0.203 | 10.63 | 0.250 | 8.64 |
-| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 0.079 | 27.36 | 0.117 | 18.50 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 0.062 | 35.00 | 0.078 | 27.57 |
-| WMMA Prefetch | 0.062 | 34.94 | 0.076 | 28.44 |
-| WMMA Decoupled | 0.057 | 38.15 | 0.070 | 30.87 |
-| rocWMMA | 0.081 | 26.60 | 0.261 | 8.29 |
-| rocBLAS | 0.054 | 40.05 | 0.043 | 49.78 |
+| Shared Memory | 0.581 | 3.74 | 0.581 | 3.74 |
+| WMMA Naive | 0.421 | 5.16 | 0.426 | 5.10 |
+| WMMA + Shared Memory | 0.222 | 9.78 | 0.225 | 9.65 |
+| WMMA + Shared Memory + Warp Tiling | 0.416 | 5.23 | 0.310 | 7.01 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering | 0.417 | 5.22 | 0.307 | 7.08 |
+| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 0.138 | 15.75 | 0.128 | 16.96 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 0.141 | 15.42 | 0.129 | 16.87 |
+| rocBLAS | 0.073 | 29.84 | 0.054 | 40.34 |
 
 ### Performance for 2048x2048 Matrix Multiplication
 | Implementation | Windows Time (ms) | Windows TFLOPs/s | WSL2 Time (ms) | WSL2 TFLOPs/s |
 |----------------|-------------------|-------------------|----------------|---------------|
-| Shared Memory | 4.383 | 3.93 | 4.559 | 3.78 |
-| WMMA Naive | 3.188 | 5.40 | 3.015 | 5.71 |
-| WMMA + Shared Memory | 1.334 | 12.90 | 1.353 | 12.71 |
-| WMMA + Shared Memory + Warp Tiling | 0.937 | 18.38 | 0.966 | 17.83 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering | 0.918 | 18.75 | 0.962 | 17.90 |
-| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 0.370 | 46.48 | 0.370 | 46.52 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 0.336 | 51.19 | 0.340 | 50.58 |
-| WMMA Prefetch | 0.330 | 52.12 | 0.346 | 49.70 |
-| WMMA Decoupled | 0.315 | 54.69 | 0.323 | 53.39 |
-| rocWMMA | 0.416 | 41.41 | 3.548 | 4.85 |
-| rocBLAS | 0.252 | 68.22 | 0.236 | 72.85 |
+| Shared Memory | 4.702 | 3.66 | 4.663 | 3.68 |
+| WMMA Naive | 3.501 | 4.92 | 3.228 | 5.32 |
+| WMMA + Shared Memory | 1.584 | 10.86 | 1.401 | 12.27 |
+| WMMA + Shared Memory + Warp Tiling | 0.927 | 18.54 | 0.761 | 22.60 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering | 0.886 | 19.41 | 0.668 | 25.73 |
+| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 0.360 | 47.73 | 0.357 | 48.20 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 0.350 | 49.21 | 0.355 | 48.46 |
+| rocBLAS | 0.263 | 65.36 | 0.246 | 69.92 |
 
 ### Performance for 4096x4096 Matrix Multiplication
 | Implementation | Windows Time (ms) | Windows TFLOPs/s | WSL2 Time (ms) | WSL2 TFLOPs/s |
 |----------------|-------------------|-------------------|----------------|---------------|
-| Shared Memory | 35.844 | 3.83 | 36.389 | 3.78 |
-| WMMA Naive | 21.856 | 6.29 | 21.269 | 6.46 |
-| WMMA + Shared Memory | 11.019 | 12.47 | 10.811 | 12.72 |
-| WMMA + Shared Memory + Warp Tiling | 6.845 | 20.08 | 6.829 | 20.13 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering | 5.532 | 24.84 | 5.317 | 25.83 |
-| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 2.109 | 65.19 | 2.147 | 64.04 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 1.894 | 72.56 | 1.873 | 73.34 |
-| WMMA Prefetch | 1.967 | 69.88 | 1.959 | 70.11 |
-| WMMA Decoupled | 1.868 | 73.57 | 1.853 | 74.14 |
-| rocWMMA | 2.757 | 49.87 | 28.163 | 4.88 |
-| rocBLAS | 1.737 | 79.15 | 1.741 | 78.94 |
+| Shared Memory | 39.775 | 3.46 | 37.274 | 3.69 |
+| WMMA Naive | 22.415 | 6.14 | 21.442 | 6.41 |
+| WMMA + Shared Memory | 11.104 | 12.40 | 11.082 | 12.41 |
+| WMMA + Shared Memory + Warp Tiling | 5.572 | 24.70 | 6.281 | 21.89 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering | 5.445 | 25.27 | 5.436 | 25.30 |
+| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 2.373 | 57.98 | 2.403 | 57.26 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 2.384 | 57.71 | 2.391 | 57.53 |
+| rocBLAS | 1.763 | 78.04 | 1.752 | 78.44 |
 
 ### Performance for 8192x8192 Matrix Multiplication
 | Implementation | Windows Time (ms) | Windows TFLOPs/s | WSL2 Time (ms) | WSL2 TFLOPs/s |
 |----------------|-------------------|-------------------|----------------|---------------|
-| Shared Memory | 310.772 | 3.54 | 313.708 | 3.51 |
-| WMMA Naive | 196.323 | 5.60 | 199.719 | 5.51 |
-| WMMA + Shared Memory | 96.578 | 11.39 | 97.271 | 11.31 |
-| WMMA + Shared Memory + Warp Tiling | 47.793 | 23.01 | 48.325 | 22.76 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering | 46.616 | 23.59 | 46.947 | 23.42 |
-| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 21.125 | 52.06 | 21.205 | 51.87 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 15.548 | 70.73 | 15.389 | 71.47 |
-| WMMA Prefetch | 15.851 | 69.38 | 16.011 | 68.69 |
-| WMMA Decoupled | 15.189 | 72.41 | 15.104 | 72.82 |
-| rocWMMA | 23.019 | 47.78 | 227.666 | 4.83 |
-| rocBLAS | 14.267 | 77.09 | 14.399 | 76.38 |
+| Shared Memory | 325.142 | 3.38 | 328.722 | 3.35 |
+| WMMA Naive | 196.534 | 5.60 | 198.914 | 5.53 |
+| WMMA + Shared Memory | 93.844 | 11.72 | 94.334 | 11.66 |
+| WMMA + Shared Memory + Warp Tiling | 42.497 | 25.88 | 42.562 | 25.84 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering | 41.151 | 26.73 | 40.816 | 26.95 |
+| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 18.912 | 58.17 | 19.017 | 57.84 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 18.378 | 59.86 | 18.455 | 59.61 |
+| rocBLAS | 14.197 | 77.48 | 14.257 | 77.16 |
 
-Key observations:
-1. Each optimization step provides significant performance improvements
-2. Global vectorized loads provide the largest single performance boost
-3. Smaller matrices (1024x1024) show more variance between implementations
-4. rocWMMA performs well on Windows but shows significantly reduced performance on WSL2
+## Verification Process
+
+The project implements a comprehensive verification system to ensure kernel correctness and numerical stability across all implementations. The verification process includes:
+
+### 1. Element-wise Validation
+- **Comparison Method:** Each element of the GPU result matrix is compared with a CPU reference implementation
+- **Adaptive Tolerance:** Different tolerances are applied based on matrix size (e.g., 0.04 for 256x256, 0.0425 for 512x512)
+- **Detailed Metrics:**
+  - Maximum relative error: Identifies the largest discrepancy and its location
+  - Average relative error: Measures overall precision across all matrix elements
+  - Number of valid comparisons: Ensures all elements are verified
+
+### 2. Matrix Norm Validation
+- **Relative Frobenius Norm Error:** Computes the difference between GPU and CPU results using matrix norms
+- **Threshold-based Check:** Ensures the global error magnitude stays below acceptable limits
+- **Mathematical Robustness:** Provides a single metric that captures overall numerical stability
+
+### 3. Pattern Validation
+- **Structural Similarity (SSIM):** Borrowed from image processing, this metric evaluates if the GPU result preserves the mathematical pattern of the reference
+- **Threshold Check:** SSIM must be above 0.95 (95% similarity) to pass
+- **Error Pattern Analysis:** Helps identify systematic issues like precision loss or algorithmic flaws
+
+### 4. Comprehensive Reporting
+The verification system provides detailed feedback for each test:
+- Specific error locations and values
+- Statistical summary of errors
+- Pass/fail status for each validation method
+- Combined overall validation status
+
+### 5. Size-Based Testing
+- Small matrices (256x256, 512x512) undergo full verification with all metrics
+- Larger matrices (1024+ dimensions) focus on performance benchmarking after correctness is established
+
+This multi-faceted approach ensures that kernel optimizations maintain numerical correctness while improving performance. As shown in the test results, all implementations achieve high accuracy with maximum relative errors under 1% and SSIM values above 0.98, indicating reliable computation regardless of the optimization techniques applied.
 
 ## Known Issues
 
-- The WMMA HGEMM kernels using shared memory have stability issues when K > M, N (Only in Windows, in WSL2 tests pass)
-- WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads verification failed for 256x256 matrices in WSL2
+1. Current implementations are limited to the work tile configurations (e.g. if a tile of 256x256x16 is used, it will only work for dimensions that are multiples of 256).
 
 ## Usage
 

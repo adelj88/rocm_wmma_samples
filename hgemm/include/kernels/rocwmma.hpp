@@ -70,7 +70,7 @@ using config_rocwmma = wmma_config<kernel_type::rocwmma>;
  */
 template<>
 __global__ void
-    __launch_bounds__(warpSize * config_rocwmma::total_warps) kernel_hgemm<kernel_type::rocwmma>(
+    __launch_bounds__(warp_size * config_rocwmma::total_warps) kernel_hgemm<kernel_type::rocwmma>(
         half* c_out, const half* a_in, const half* b_in, int m, int n, int k)
 {
     using namespace rocwmma;
@@ -82,7 +82,7 @@ __global__ void
 
     // Local warp coordinate setup
     constexpr auto warp_dims = make_coord2d(config_rocwmma::warps_m, config_rocwmma::warps_n);
-    auto           local_warp_coord  = make_coord2d(threadIdx.x / warpSize, threadIdx.y);
+    auto           local_warp_coord  = make_coord2d(threadIdx.x / warp_size, threadIdx.y);
     auto           local_warp_offset = local_warp_coord * warp_tile_size;
 
     // Global matrix coordinates
@@ -291,7 +291,7 @@ template<>
 __host__ void hgemm_gpu<kernel_type::rocwmma>(
     half* c_out, half* a_in, half* b_in, size_t m, size_t n, size_t k, hipStream_t& stream)
 {
-    dim3 block_dim(32 * config_rocwmma::warps_m, config_rocwmma::warps_n);
+    dim3 block_dim(warp_size * config_rocwmma::warps_m, config_rocwmma::warps_n);
     dim3 grid_dim(ceil_div(m, config_rocwmma::block_m), ceil_div(n, config_rocwmma::block_n));
 
     kernel_hgemm<kernel_type::rocwmma>

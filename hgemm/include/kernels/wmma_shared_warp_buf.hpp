@@ -31,248 +31,242 @@
 template<>
 struct wmma_config<kernel_type::wmma_shared_warp_buf>
 {
-    static constexpr int warps_m     = 2;
+    static constexpr int warps_m     = 4;
     static constexpr int warps_n     = 4;
     static constexpr int total_warps = warps_m * warps_n;
 
     static constexpr int warp_tile_m = 4;
-    static constexpr int warp_tile_n = 2;
+    static constexpr int warp_tile_n = 4;
 
-    static constexpr int block_m = warps_m * warp_tile_m * wmma_tile;
-    static constexpr int block_n = warps_n * warp_tile_n * wmma_tile;
-    static constexpr int block_k = wmma_tile;
+    static constexpr int block_m = warps_m * warp_tile_m * wmma_tile; // 4*4*16 = 256
+    static constexpr int block_n = warps_n * warp_tile_n * wmma_tile; // 4*4*16 = 256
+    static constexpr int block_k = 32;
 
-    // Shared memory layout
-    static constexpr int lds_width  = block_k;
-    static constexpr int lds_height = block_m + block_n;
-    static constexpr int lds_size   = lds_height * lds_width;
-    static constexpr int lds_stride = lds_width;
+    // For A (stored column-major), each column has block_m elements.
+    static constexpr int lds_stride_A = block_m;
+    // For B (stored row-major), each row has block_n elements.
+    static constexpr int lds_stride_B = block_n;
+    // Total shared memory size: region for A plus region for B.
+    static constexpr int lds_size = (block_m * block_k) + (block_k * block_n);
 };
 
-using config_wd = wmma_config<kernel_type::wmma_shared_warp_buf>;
+using config_wb = wmma_config<kernel_type::wmma_shared_warp_buf>;
 
 /**
- * @brief Half-precision GEMM using WMMA with shared memory, double buffering and warp tiling
+ * @brief Half-precision GEMM using WMMA with double-buffered shared memory and warp-level tiling
  *
- * This kernel combines WMMA operations with shared memory, double buffering
- * and warp-level tiling. It uses double buffering to overlap computation with memory
- * operations, maximizing hardware utilization and hiding memory latency.
+ * This kernel extends the shared memory WMMA implementation with double buffering and warp-level tiling.
+ * Double buffering allows us to overlap computation with memory transfers by using two separate
+ * shared memory buffers, significantly reducing memory stalls and improving performance.
  *
  * @tparam K_TYPE The type of kernel, should be 'kernel_type::wmma_shared_warp_buf'
  * @param[out] C  Output matrix of size M × N
- * @param[in]  A  Input matrix A of size M × K (stored in column-major format)
- * @param[in]  B  Input matrix B of size K × N (stored in row-major format)
+ * @param[in]  A  Input matrix A of size M × K
+ * @param[in]  B  Input matrix B of size K × N (stored in column-major format)
  * @param[in]  M  Number of rows in matrices A and C
  * @param[in]  N  Number of columns in matrices B and C
  * @param[in]  K  Number of columns in matrix A/rows in matrix B
  *
- * @note Implements double-buffering at global->shared
- * @note Each warp processes a 4×2 grid of 16×16 WMMA tiles
- * @note Uses shared memory tiles of size (block_m × block_k) for A and (block_k × block_n) for B
- * @note Employs a 2×4 warp grid configuration within each thread block
+ * @note Each warp processes a 4×4 grid of 16×16 WMMA tiles
+ * @note Uses double-buffered shared memory tiles for increased performance
+ * @note Employs a 4×4 warp grid configuration within each thread block
  */
 template<>
-__global__ void __launch_bounds__(warpSize * config_wd::total_warps)
-    kernel_hgemm<kernel_type::wmma_shared_warp_buf>(
-        half* C, const half* A, const half* B, int M, int N, int K)
+__global__ void kernel_hgemm<kernel_type::wmma_shared_warp_buf>(
+    half* C, const half* A, const half* B, int M, int N, int K)
 {
-    // Single unified shared memory buffer
-    __shared__ half lds_mem[2][config_wd::lds_size];
+    // Allocate a unified shared memory buffer.
+    __shared__ half lds_mem[2][config_wb::lds_size];
 
-    // Create pointers for A and B regions
-    half* a_tiles = &lds_mem[0][0];
-    half* b_tiles = &lds_mem[0][config_wd::block_m * config_wd::lds_stride];
+    // Partition the shared memory:
+    // A tiles occupy the first region.
+    half* a_tiles_0 = lds_mem[0];
+    half* a_tiles_1 = lds_mem[1];
+    // B tiles start after A's region.
+    half* b_tiles_0 = lds_mem[0] + (config_wb::block_m * config_wb::block_k);
+    half* b_tiles_1 = lds_mem[1] + (config_wb::block_m * config_wb::block_k);
 
-    const int tid         = threadIdx.y + blockDim.y + threadIdx.x;
-    const int num_threads = blockDim.x * blockDim.y;
+    // Each block is launched with a one-dimensional thread block.
+    const int tid         = threadIdx.x;
+    const int num_threads = blockDim.x;
 
-    const int block_row = blockIdx.x * config_wd::block_m;
-    const int block_col = blockIdx.y * config_wd::block_n;
+    const int block_row = blockIdx.x * config_wb::block_m;
+    const int block_col = blockIdx.y * config_wb::block_n;
 
-    const half* A_base = A + block_row; // Column-major A
-    const half* B_base = B + block_col; // Row-major B
+    const half* A_base = A + block_row; // A is in column-major order
+    const half* B_base = B + block_col; // B is in row-major order
     half*       C_base = C + block_row * N + block_col;
 
-    const int warp_row = threadIdx.x / warpSize;
-    const int warp_col = threadIdx.y;
+    // Compute warp ID from the 1D thread index.
+    const int warp_id  = tid / warp_size;
+    const int warp_row = warp_id / config_wb::warps_n;
+    const int warp_col = warp_id % config_wb::warps_n;
 
-    constexpr int half_warp    = warpSize / 2;
-    const int     half_warp_id = (threadIdx.x % warpSize) / half_warp;
-    const int     half_lane    = threadIdx.x % half_warp;
+    constexpr int half_warp    = warp_size / 2;
+    const int     half_warp_id = (tid % warp_size) / half_warp;
+    const int     half_lane    = tid % half_warp;
 
-    const int warp_m_base = warp_row * config_wd::warp_tile_m * wmma_tile;
-    const int warp_n_base = warp_col * config_wd::warp_tile_n * wmma_tile;
+    // Determine the base offsets for this warp's set of WMMA tiles.
+    const int warp_m_base = warp_row * config_wb::warp_tile_m * wmma_tile;
+    const int warp_n_base = warp_col * config_wb::warp_tile_n * wmma_tile;
 
-    half16 c_frags[config_wd::warp_tile_m][config_wd::warp_tile_n] = {};
-    half16 a_frag[config_wd::warp_tile_m]                          = {};
-    half16 b_frag[config_wd::warp_tile_n]                          = {};
+    // Declare fragment storage.
+    half16 c_frags[config_wb::warp_tile_m][config_wb::warp_tile_n] = {};
+    half16 a_frag[config_wb::warp_tile_m]                          = {};
+    half16 b_frag[config_wb::warp_tile_n]                          = {};
 
-    // Load first tiles into buffer 0
+    // Base pointers for the current A and B tiles.
+    const half* A_tile_ptr = A_base;
+    const half* B_tile_ptr = B_base;
+
+    // Load A tile (of size block_m × block_k) into shared memory.
+    // Use lds_stride_A (which is block_m) as the stride.
+    for(int i = tid; i < (config_wb::block_m * config_wb::block_k); i += num_threads)
     {
-        // Load A tile (column-major)
-        for(int i = tid; i < (config_wd::block_m * config_wd::block_k); i += num_threads)
-        {
-            const int col = i / config_wd::block_m;
-            const int row = i % config_wd::block_m;
+        const int col = i / config_wb::block_m;
+        const int row = i % config_wb::block_m;
 
-            if(block_row + row < M && col < K)
-            {
-                *(a_tiles + col * config_wd::lds_stride + row) = *(A_base + col * M + row);
-            }
-            else
-            {
-                *(a_tiles + col * config_wd::lds_stride + row) = static_cast<half>(0.0f);
-            }
-        }
+        if(block_row + row < M && col < K)
+            a_tiles_0[col * config_wb::lds_stride_A + row] = A_tile_ptr[col * M + row];
+        else
+            a_tiles_0[col * config_wb::lds_stride_A + row] = static_cast<half>(0.0f);
+    }
 
-        // Load B tile (row-major)
-        for(int i = tid; i < (config_wd::block_k * config_wd::block_n); i += num_threads)
-        {
-            const int row = i / config_wd::block_n;
-            const int col = i % config_wd::block_n;
+    // Load B tile (of size block_k × block_n) into shared memory.
+    // Use lds_stride_B (which is block_n) as the stride.
+    for(int i = tid; i < (config_wb::block_k * config_wb::block_n); i += num_threads)
+    {
+        const int row = i / config_wb::block_n;
+        const int col = i % config_wb::block_n;
 
-            if(row < K && block_col + col < N)
-            {
-                *(b_tiles + row * config_wd::lds_stride + col) = *(B_base + row * N + col);
-            }
-            else
-            {
-                *(b_tiles + row * config_wd::lds_stride + col) = static_cast<half>(0.0f);
-            }
-        }
+        if(row < K && block_col + col < N)
+            b_tiles_0[row * config_wb::lds_stride_B + col] = B_tile_ptr[row * N + col];
+        else
+            b_tiles_0[row * config_wb::lds_stride_B + col] = static_cast<half>(0.0f);
     }
 
     __syncthreads();
 
-    int         current_tile = 0;
-    const half* A_tile_ptr   = A_base;
-    const half* B_tile_ptr   = B_base;
-
-    for(int k_tile = 0; k_tile < K; k_tile += config_wd::block_k)
+    half* current_a = a_tiles_0;
+    half* current_b = b_tiles_0;
+    half* next_a    = a_tiles_1;
+    half* next_b    = b_tiles_1;
+    for(int k_tile = 0; k_tile < K; k_tile += config_wb::block_k)
     {
-        if(k_tile + config_wd::block_k < K)
+        if(k_tile + config_wb::block_k < K)
         {
-            // Load next tiles into the opposite buffer
-            half* next_a_tile = &lds_mem[current_tile ^ 1][0];
-            half* next_b_tile
-                = &lds_mem[current_tile ^ 1][0] + config_wd::block_m * config_wd::lds_stride;
-            const half* A_next = A_tile_ptr + (k_tile + config_wd::block_k) * M;
-            const half* B_next = B_tile_ptr + (k_tile + config_wd::block_k) * N;
-
-            // Load next A tile (column-major)
-            for(int i = tid; i < (config_wd::block_m * config_wd::block_k); i += num_threads)
+            const half* next_A = A_tile_ptr + M * config_wb::block_k;
+            const half* next_B = B_tile_ptr + N * config_wb::block_k;
+            // Load A tile (of size block_m × block_k) into shared memory.
+            // Use lds_stride_A (which is block_m) as the stride.
+            for(int i = tid; i < (config_wb::block_m * config_wb::block_k); i += num_threads)
             {
-                const int col = i / config_wd::block_m;
-                const int row = i % config_wd::block_m;
+                const int col = i / config_wb::block_m;
+                const int row = i % config_wb::block_m;
 
-                if(block_row + row < M && k_tile + config_wd::block_k + col < K)
-                {
-                    *(next_a_tile + col * config_wd::lds_stride + row) = *(A_next + row);
-                }
+                if(block_row + row < M && k_tile + config_wb::block_k + col < K)
+                    next_a[col * config_wb::lds_stride_A + row] = next_A[col * M + row];
                 else
-                {
-                    *(next_a_tile + col * config_wd::lds_stride + row) = static_cast<half>(0.0f);
-                }
+                    next_a[col * config_wb::lds_stride_A + row] = static_cast<half>(0.0f);
             }
 
-            // Load next B tile (row-major)
-            for(int i = tid; i < (config_wd::block_k * config_wd::block_n); i += num_threads)
+            // Load B tile (of size block_k × block_n) into shared memory.
+            // Use lds_stride_B (which is block_n) as the stride.
+            for(int i = tid; i < (config_wb::block_k * config_wb::block_n); i += num_threads)
             {
-                const int row = i / config_wd::block_n;
-                const int col = i % config_wd::block_n;
+                const int row = i / config_wb::block_n;
+                const int col = i % config_wb::block_n;
 
-                if(k_tile + config_wd::block_k + row < K && block_col + col < N)
-                {
-                    *(next_b_tile + row * config_wd::lds_stride + col) = *(B_next + row * N + col);
-                }
+                if(k_tile + config_wb::block_k + row < K && block_col + col < N)
+                    next_b[row * config_wb::lds_stride_B + col] = next_B[row * N + col];
                 else
+                    next_b[row * config_wb::lds_stride_B + col] = static_cast<half>(0.0f);
+            }
+        }
+
+        // Process the loaded block_k in wmma_tile chunks
+        for(int k_offset = 0; k_offset < config_wb::block_k; k_offset += wmma_tile)
+        {
+            // Each warp loads its A fragments (for warp_tile_m WMMA tiles)
+            for(int wm = 0; wm < config_wb::warp_tile_m; ++wm)
+            {
+                // Pointer to the start of the corresponding row in the A tile.
+                const half* src = current_a + k_offset * config_wb::lds_stride_A
+                                  + (warp_m_base + wm * wmma_tile + half_lane);
+                half* dest = reinterpret_cast<half*>(&a_frag[wm]);
+#pragma unroll
+                for(int i = 0; i < wmma_tile; ++i)
                 {
-                    *(next_b_tile + row * config_wd::lds_stride + col) = static_cast<half>(0.0f);
+                    *dest++ = *src;
+                    src += config_wb::lds_stride_A;
+                }
+            }
+
+            // Each warp loads its B fragments (for warp_tile_n WMMA tiles)
+            for(int wn = 0; wn < config_wb::warp_tile_n; ++wn)
+            {
+                const half* src = current_b + k_offset * config_wb::lds_stride_B
+                                  + (warp_n_base + wn * wmma_tile + half_lane);
+                half* dest = reinterpret_cast<half*>(&b_frag[wn]);
+#pragma unroll
+                for(int i = 0; i < wmma_tile; ++i)
+                {
+                    *dest++ = *src;
+                    src += config_wb::lds_stride_B;
+                }
+            }
+
+            // Compute: each warp performs WMMA on its fragments.
+            for(int wm = 0; wm < config_wb::warp_tile_m; ++wm)
+            {
+                for(int wn = 0; wn < config_wb::warp_tile_n; ++wn)
+                {
+                    c_frags[wm][wn] = __builtin_amdgcn_wmma_f16_16x16x16_f16_w32(a_frag[wm],
+                                                                                 b_frag[wn],
+                                                                                 c_frags[wm][wn],
+                                                                                 false);
                 }
             }
         }
 
-        // Pre-calculate shared memory base pointers for current tile
-        const half* const a_base_ptr = &lds_mem[current_tile][0];
-        const half* const b_base_ptr
-            = &lds_mem[current_tile][0] + config_wd::block_m * config_wd::lds_stride;
-
-        // Process
-        // For A (column-major loading)
-        for(int wm = 0; wm < config_wd::warp_tile_m; ++wm)
-        {
-            const half* src  = a_base_ptr + (warp_m_base + wm * wmma_tile + half_lane);
-            half*       dest = reinterpret_cast<half*>(&a_frag[wm]);
-
-#pragma unroll
-            for(int i = 0; i < wmma_tile; ++i)
-            {
-                *dest++ = *src;
-                src += config_wd::lds_stride; // Move down column
-            }
-        }
-
-        // For B (row-major loading)
-        for(int wn = 0; wn < config_wd::warp_tile_n; ++wn)
-        {
-            const half* src  = b_base_ptr + (warp_n_base + wn * wmma_tile + half_lane);
-            half*       dest = reinterpret_cast<half*>(&b_frag[wn]);
-
-#pragma unroll
-            for(int i = 0; i < wmma_tile; ++i)
-            {
-                *dest++ = *src;
-                src += config_wd::lds_stride;
-            }
-        }
-
-        // Compute matrix multiplication
-        for(int wm = 0; wm < config_wd::warp_tile_m; ++wm)
-        {
-            for(int wn = 0; wn < config_wd::warp_tile_n; ++wn)
-            {
-                c_frags[wm][wn] = __builtin_amdgcn_wmma_f16_16x16x16_f16_w32(a_frag[wm],
-                                                                             b_frag[wn],
-                                                                             c_frags[wm][wn],
-                                                                             false);
-            }
-        }
-
-        A_tile_ptr += M * config_wd::block_k; // Column-major stride for A
-        B_tile_ptr += N * config_wd::block_k; // Row-major stride for B
-        current_tile ^= 1;
-        //__syncthreads();
+        // Advance the global pointers for A and B tiles.
+        A_tile_ptr += M * config_wb::block_k;
+        B_tile_ptr += N * config_wb::block_k;
+        half* temp_a = current_a;
+        half* temp_b = current_b;
+        current_a    = next_a;
+        current_b    = next_b;
+        next_a       = temp_a;
+        next_b       = temp_b;
+        __syncthreads();
     }
 
-    // Store results
+    // Write the computed fragments to global memory.
     half* C_warp = C_base + warp_m_base * N + warp_n_base;
-    for(int wm = 0; wm < config_wd::warp_tile_m; wm++)
+    for(int wm = 0; wm < config_wb::warp_tile_m; wm++)
     {
         half* C_row = C_warp + wm * wmma_tile * N;
-        for(int wn = 0; wn < config_wd::warp_tile_n; wn++)
+        for(int wn = 0; wn < config_wb::warp_tile_n; wn++)
         {
             const int n_offset = wn * wmma_tile + half_lane;
 #pragma unroll
             for(int i = 0; i < wmma_tile / 2; ++i)
             {
                 const int row = i * 2 + half_warp_id;
-                if(row < config_wd::block_m && n_offset < config_wd::block_n
-                   && block_row + warp_m_base + row < M && block_col + n_offset < N)
-                {
-                    *(C_row + row * N + n_offset) = c_frags[wm][wn][i * 2];
-                }
+                if(block_row + warp_m_base + row < M && block_col + n_offset < N)
+                    C_row[row * N + n_offset] = c_frags[wm][wn][i * 2];
             }
         }
     }
 }
 
 /**
- * Function Definition for calling WMMA + Shared + Warp-Tiling + Double Buffering GEMM kernel
+ * Function Definition for calling double-buffered WMMA + Shared + Warp-Tiling GEMM kernel
  *
  * @tparam K_TYPE The type of kernel, should be 'kernel_type::wmma_shared_warp_buf'
  * @param C       Output matrix
- * @param A       Input matrix A (stored in column-major format)
- * @param B       Input matrix B (stored in row-major format)
+ * @param A       Input matrix A
+ * @param B       Input matrix B
  * @param M       Number of rows in matrices A and C
  * @param N       Number of columns in matrices B and C
  * @param K       Number of columns in matrix A/rows in matrix B
@@ -282,9 +276,8 @@ template<>
 __host__ void hgemm_gpu<kernel_type::wmma_shared_warp_buf>(
     half* C, half* A, half* B, size_t M, size_t N, size_t K, hipStream_t& stream)
 {
-    constexpr int warp_size = 32;
-    dim3          block_dim(warp_size * config_wd::warps_m, config_wd::warps_n);
-    dim3          grid_dim(ceil_div(M, config_wd::block_m), ceil_div(N, config_wd::block_n));
+    dim3 block_dim(warp_size * config_wb::total_warps);
+    dim3 grid_dim(ceil_div(M, config_wb::block_m), ceil_div(N, config_wb::block_n));
 
     kernel_hgemm<kernel_type::wmma_shared_warp_buf>
         <<<grid_dim, block_dim, 0, stream>>>(C, A, B, M, N, K);

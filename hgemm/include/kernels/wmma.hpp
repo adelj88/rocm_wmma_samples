@@ -54,7 +54,7 @@ __device__ inline auto
                              && access == matrix_layout::row_major),
                             void>::type
 {
-    constexpr int half_warp = warpSize / 2;
+    constexpr int half_warp = warp_size / 2;
     // lane is (0-31) mod 16 instead of 0-31 due to matrix replication in RDNA 3
     int lane   = threadIdx.x % half_warp; // Lane index within the half-wave
     int offset = row + lane;
@@ -77,7 +77,7 @@ __device__ inline auto
                              && access == matrix_layout::col_major),
                             void>::type
 {
-    constexpr int half_warp = warpSize / 2;
+    constexpr int half_warp = warp_size / 2;
     // lane is (0-31) mod 16 instead of 0-31 due to matrix replication in RDNA 3
     int lane   = threadIdx.x % half_warp; // Lane index within the half-wave
     int offset = row + lane;
@@ -101,7 +101,7 @@ __device__ inline auto
                              && access == matrix_layout::row_major),
                             void>::type
 {
-    constexpr int half_warp = warpSize / 2;
+    constexpr int half_warp = warp_size / 2;
     // lane is (0-31) mod 16 instead of 0-31 due to matrix replication in RDNA 3
     int lane   = threadIdx.x % half_warp; // Lane index within the half-wave
     int offset = col + lane;
@@ -125,7 +125,7 @@ __device__ inline auto
                              && access == matrix_layout::col_major),
                             void>::type
 {
-    constexpr int half_warp = warpSize / 2;
+    constexpr int half_warp = warp_size / 2;
     // lane is (0-31) mod 16 instead of 0-31 due to matrix replication in RDNA 3
     int lane   = threadIdx.x % half_warp; // Lane index within the half-wave
     int offset = col + lane;
@@ -153,9 +153,9 @@ __device__ inline auto
  */
 __device__ inline void store_matrix(half* data, half16& frag, int row, int col, int M, int N)
 {
-    constexpr int half_warp    = warpSize / 2;
+    constexpr int half_warp    = warp_size / 2;
     int           lane         = threadIdx.x % half_warp; // Lane index within the half-wave
-    int           half_warp_id = (threadIdx.x % warpSize) / half_warp; // Index for half-warp
+    int           half_warp_id = (threadIdx.x % warp_size) / half_warp; // Index for half-warp
     int           offset       = col + lane;
 
     half* tmp = reinterpret_cast<half*>(offset + row * N);
@@ -180,10 +180,10 @@ __device__ inline void store_matrix(half* data, half16& frag, int row, int col, 
  * @param K       Number of columns in matrix A/rows in matrix B
  */
 template<>
-__global__ void __launch_bounds__(warpSize * 16) kernel_hgemm<kernel_type::wmma_naive>(
+__global__ void __launch_bounds__(warp_size * 16) kernel_hgemm<kernel_type::wmma_naive>(
     half* C, const half* A, const half* B, int M, int N, int K)
 {
-    int ix = (blockIdx.x * blockDim.x + threadIdx.x) / warpSize; // Row of tile in C/A
+    int ix = (blockIdx.x * blockDim.x + threadIdx.x) / warp_size; // Row of tile in C/A
     int iy = blockIdx.y * blockDim.y + threadIdx.y; // Column of tile in C/B
 
     int c_row = ix * wmma_tile; // Starting row index for tile in A/C
@@ -225,7 +225,6 @@ template<>
 __host__ void hgemm_gpu<kernel_type::wmma_naive>(
     half* C, half* A, half* B, size_t M, size_t N, size_t K, hipStream_t& stream)
 {
-    constexpr int warp_size = 32; // bug on my system where warp size on host side is not 32
     dim3          block_dim(warp_size * 4, 4);
     dim3          grid_dim(ceil_div(M, wmma_tile * block_dim.x / warp_size),
                   ceil_div(N, wmma_tile * block_dim.y));

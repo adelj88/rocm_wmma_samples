@@ -38,21 +38,19 @@ enum class kernel_type
     wmma_shared_warp_buf,
     wmma_shared_warp_vec,
     wmma_shared_warp_buf_vec,
-    wmma_prefetch,
-    wmma_decoupled,
     rocblas
-#ifdef HAS_ROCWMMA
-    ,
-    rocwmma
-#endif
 };
 
 // Tile size used for wmma kernel
 constexpr int wmma_tile = 16;
 
+constexpr int warp_size = 32;
+
 typedef _Float16 half4 __attribute__((ext_vector_type(4)));
 typedef _Float16 half8 __attribute__((ext_vector_type(8)));
 typedef _Float16 half16 __attribute__((ext_vector_type(16)));
+
+typedef float float8 __attribute__((ext_vector_type(8)));
 
 template<kernel_type KT>
 struct wmma_config;
