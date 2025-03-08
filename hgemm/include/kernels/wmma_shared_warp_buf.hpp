@@ -76,15 +76,15 @@ __global__ void kernel_hgemm<kernel_type::wmma_shared_warp_buf>(
     half* C, const half* A, const half* B, int M, int N, int K)
 {
     // Allocate a unified shared memory buffer.
-    __shared__ half lds_mem[2][config_wb::lds_size];
+    __shared__ half lds_mem[2 * config_wb::lds_size];
 
-    // Partition the shared memory:
-    // A tiles occupy the first region.
-    half* a_tiles_0 = lds_mem[0];
-    half* a_tiles_1 = lds_mem[1];
-    // B tiles start after A's region.
-    half* b_tiles_0 = lds_mem[0] + (config_wb::block_m * config_wb::block_k);
-    half* b_tiles_1 = lds_mem[1] + (config_wb::block_m * config_wb::block_k);
+    // Partition the shared memory with manual offset calculations:
+    // A tiles occupy the first region in each buffer
+    half* a_tiles_0 = lds_mem;
+    half* a_tiles_1 = lds_mem + config_wb::lds_size;
+    // B tiles start after A's region in each buffer
+    half* b_tiles_0 = lds_mem + (config_wb::block_m * config_wb::block_k);
+    half* b_tiles_1 = lds_mem + config_wb::lds_size + (config_wb::block_m * config_wb::block_k);
 
     // Each block is launched with a one-dimensional thread block.
     const int tid         = threadIdx.x;

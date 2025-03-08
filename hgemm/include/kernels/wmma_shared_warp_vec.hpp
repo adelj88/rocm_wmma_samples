@@ -50,8 +50,8 @@ struct wmma_config<kernel_type::wmma_shared_warp_vec>
     static constexpr int lds_size = (block_m * block_k) + (block_k * block_n);
 
     // Vector loading configuration
-    static constexpr int vector_width = 8;
-    using vector_type                 = half8;
+    static constexpr int vector_width = 16;
+    using vector_type                 = half16;
 };
 
 using config_wv = wmma_config<kernel_type::wmma_shared_warp_vec>;

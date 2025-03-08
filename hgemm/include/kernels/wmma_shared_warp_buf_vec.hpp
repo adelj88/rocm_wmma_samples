@@ -50,8 +50,8 @@ struct wmma_config<kernel_type::wmma_shared_warp_buf_vec>
     static constexpr int lds_size = (block_m * block_k) + (block_k * block_n);
 
     // Vector loading configuration
-    static constexpr int vector_width = 8;
-    using vector_type                 = half8;
+    static constexpr int vector_width = 16;
+    using vector_type                 = half16;
 };
 
 using config_wbv = wmma_config<kernel_type::wmma_shared_warp_buf_vec>;
@@ -82,15 +82,15 @@ __global__ void kernel_hgemm<kernel_type::wmma_shared_warp_buf_vec>(
     half* C, const half* A, const half* B, int M, int N, int K)
 {
     // Allocate a unified shared memory buffer.
-    __shared__ half lds_mem[2][config_wbv::lds_size];
+    __shared__ half lds_mem[2 * config_wbv::lds_size];
 
-    // Partition the shared memory:
-    // A tiles occupy the first region.
-    half* a_tiles_0 = lds_mem[0];
-    half* a_tiles_1 = lds_mem[1];
-    // B tiles start after A's region.
-    half* b_tiles_0 = lds_mem[0] + (config_wbv::block_m * config_wbv::block_k);
-    half* b_tiles_1 = lds_mem[1] + (config_wbv::block_m * config_wbv::block_k);
+    // Partition the shared memory with manual offset calculations:
+    // A tiles occupy the first region in each buffer
+    half* a_tiles_0 = lds_mem;
+    half* a_tiles_1 = lds_mem + config_wbv::lds_size;
+    // B tiles start after A's region in each buffer
+    half* b_tiles_0 = lds_mem + (config_wbv::block_m * config_wbv::block_k);
+    half* b_tiles_1 = lds_mem + config_wbv::lds_size + (config_wbv::block_m * config_wbv::block_k);
 
     // Each block is launched with a one-dimensional thread block.
     const int tid         = threadIdx.x;
@@ -120,8 +120,12 @@ __global__ void kernel_hgemm<kernel_type::wmma_shared_warp_buf_vec>(
 
     // Declare fragment storage.
     half16 c_frags[config_wbv::warp_tile_m][config_wbv::warp_tile_n] = {};
-    half16 a_frag[config_wbv::warp_tile_m]                           = {};
-    half16 b_frag[config_wbv::warp_tile_n]                           = {};
+
+    // Two sets of fragments for double-buffering at the fragment level
+    half16 a_frag_0[config_wbv::warp_tile_m] = {};
+    half16 a_frag_1[config_wbv::warp_tile_m] = {};
+    half16 b_frag_0[config_wbv::warp_tile_n] = {};
+    half16 b_frag_1[config_wbv::warp_tile_n] = {};
 
     // Base pointers for the current A and B tiles.
     const half* A_tile_ptr = A_base;
@@ -130,7 +134,6 @@ __global__ void kernel_hgemm<kernel_type::wmma_shared_warp_buf_vec>(
     if(tid < half_block)
     {
         // Load A tile (of size block_m × block_k) into shared memory.
-        // Use lds_stride_A (which is block_m) as the stride.
         for(int i = cid * config_wbv::vector_width; i < (config_wbv::block_m * config_wbv::block_k);
             i += half_block * config_wbv::vector_width)
         {
@@ -162,7 +165,6 @@ __global__ void kernel_hgemm<kernel_type::wmma_shared_warp_buf_vec>(
     else
     {
         // Load B tile (row-major) using vectorized loads
-        // Vector loads for full vector elements
         for(int i = cid * config_wbv::vector_width; i < (config_wbv::block_k * config_wbv::block_n);
             i += half_block * config_wbv::vector_width)
         {
@@ -198,6 +200,8 @@ __global__ void kernel_hgemm<kernel_type::wmma_shared_warp_buf_vec>(
     half* current_b = b_tiles_0;
     half* next_a    = a_tiles_1;
     half* next_b    = b_tiles_1;
+
+    // Main loop over k-dimension
     for(int k_tile = 0; k_tile < K; k_tile += config_wbv::block_k)
     {
         if(k_tile + config_wbv::block_k < K)
@@ -208,7 +212,6 @@ __global__ void kernel_hgemm<kernel_type::wmma_shared_warp_buf_vec>(
             if(tid < half_block)
             {
                 // Load A tile (of size block_m × block_k) into shared memory.
-                // Use lds_stride_A (which is block_m) as the stride.
                 for(int i = cid * config_wbv::vector_width;
                     i < (config_wbv::block_m * config_wbv::block_k);
                     i += half_block * config_wbv::vector_width)
@@ -219,7 +222,6 @@ __global__ void kernel_hgemm<kernel_type::wmma_shared_warp_buf_vec>(
                     if((block_row + row + config_wbv::vector_width - 1) < M
                        && (k_tile + config_wbv::block_k + col) < K)
                     {
-                        // Load full vector
                         *reinterpret_cast<config_wbv::vector_type*>(
                             next_a + col * config_wbv::lds_stride_A + row)
                             = *reinterpret_cast<const config_wbv::vector_type*>(next_A + col * M
@@ -227,7 +229,6 @@ __global__ void kernel_hgemm<kernel_type::wmma_shared_warp_buf_vec>(
                     }
                     else
                     {
-                        // Handle the boundary case element by element
                         for(int v = 0; v < config_wbv::vector_width; v++)
                         {
                             if(block_row + row + v < M && k_tile + config_wbv::block_k + col < K)
@@ -243,7 +244,6 @@ __global__ void kernel_hgemm<kernel_type::wmma_shared_warp_buf_vec>(
             else
             {
                 // Load B tile (row-major) using vectorized loads
-                // Vector loads for full vector elements
                 for(int i = cid * config_wbv::vector_width;
                     i < (config_wbv::block_k * config_wbv::block_n);
                     i += half_block * config_wbv::vector_width)
@@ -254,7 +254,6 @@ __global__ void kernel_hgemm<kernel_type::wmma_shared_warp_buf_vec>(
                     if((k_tile + config_wbv::block_k + row) < K
                        && (block_col + col + config_wbv::vector_width - 1) < N)
                     {
-                        // Load full vector
                         *reinterpret_cast<config_wbv::vector_type*>(
                             next_b + row * config_wbv::lds_stride_B + col)
                             = *reinterpret_cast<const config_wbv::vector_type*>(next_B + row * N
@@ -262,7 +261,6 @@ __global__ void kernel_hgemm<kernel_type::wmma_shared_warp_buf_vec>(
                     }
                     else
                     {
-                        // Handle the boundary case element by element
                         for(int v = 0; v < config_wbv::vector_width; v++)
                         {
                             if(k_tile + config_wbv::block_k + row < K && block_col + col + v < N)
@@ -278,47 +276,101 @@ __global__ void kernel_hgemm<kernel_type::wmma_shared_warp_buf_vec>(
         }
 
         // Process the loaded block_k in wmma_tile chunks
-        for(int k_offset = 0; k_offset < config_wbv::block_k; k_offset += wmma_tile)
+        // Simplified fragment-level double buffering
+        half16* compute_a_frag = a_frag_0;
+        half16* compute_b_frag = b_frag_0;
+        half16* load_a_frag    = a_frag_1;
+        half16* load_b_frag    = b_frag_1;
+
+        // Initial load of the first fragment set
+        int k_offset = 0;
+        for(int wm = 0; wm < config_wbv::warp_tile_m; ++wm)
         {
-            // Each warp loads its A fragments (for warp_tile_m WMMA tiles)
-            for(int wm = 0; wm < config_wbv::warp_tile_m; ++wm)
-            {
-                // Pointer to the start of the corresponding row in the A tile.
-                const half* src = current_a + k_offset * config_wbv::lds_stride_A
-                                  + (warp_m_base + wm * wmma_tile + half_lane);
-                half* dest = reinterpret_cast<half*>(&a_frag[wm]);
+            // Pointer to the start of the corresponding row in the A tile.
+            const half* src = current_a + k_offset * config_wbv::lds_stride_A
+                              + (warp_m_base + wm * wmma_tile + half_lane);
+            half* dest = reinterpret_cast<half*>(&compute_a_frag[wm]);
 #pragma unroll
-                for(int i = 0; i < wmma_tile; ++i)
+            for(int i = 0; i < wmma_tile; ++i)
+            {
+                *dest++ = *src;
+                src += config_wbv::lds_stride_A;
+            }
+        }
+
+        for(int wn = 0; wn < config_wbv::warp_tile_n; ++wn)
+        {
+            const half* src = current_b + k_offset * config_wbv::lds_stride_B
+                              + (warp_n_base + wn * wmma_tile + half_lane);
+            half* dest = reinterpret_cast<half*>(&compute_b_frag[wn]);
+#pragma unroll
+            for(int i = 0; i < wmma_tile; ++i)
+            {
+                *dest++ = *src;
+                src += config_wbv::lds_stride_B;
+            }
+        }
+
+        // Process with double-buffered fragments - only load next fragment if needed
+        for(k_offset = 0; k_offset < config_wbv::block_k; k_offset += wmma_tile)
+        {
+            // If this isn't the last iteration, preload the next fragment
+            if(k_offset + wmma_tile < config_wbv::block_k)
+            {
+                // Preload next fragment set
+                const int next_k_offset = k_offset + wmma_tile;
+
+                // Preload next A fragments
+                for(int wm = 0; wm < config_wbv::warp_tile_m; ++wm)
                 {
-                    *dest++ = *src;
-                    src += config_wbv::lds_stride_A;
+                    const half* src = current_a + next_k_offset * config_wbv::lds_stride_A
+                                      + (warp_m_base + wm * wmma_tile + half_lane);
+                    half* dest = reinterpret_cast<half*>(&load_a_frag[wm]);
+#pragma unroll
+                    for(int i = 0; i < wmma_tile; ++i)
+                    {
+                        *dest++ = *src;
+                        src += config_wbv::lds_stride_A;
+                    }
+                }
+
+                // Preload next B fragments
+                for(int wn = 0; wn < config_wbv::warp_tile_n; ++wn)
+                {
+                    const half* src = current_b + next_k_offset * config_wbv::lds_stride_B
+                                      + (warp_n_base + wn * wmma_tile + half_lane);
+                    half* dest = reinterpret_cast<half*>(&load_b_frag[wn]);
+#pragma unroll
+                    for(int i = 0; i < wmma_tile; ++i)
+                    {
+                        *dest++ = *src;
+                        src += config_wbv::lds_stride_B;
+                    }
                 }
             }
 
-            // Each warp loads its B fragments (for warp_tile_n WMMA tiles)
-            for(int wn = 0; wn < config_wbv::warp_tile_n; ++wn)
-            {
-                const half* src = current_b + k_offset * config_wbv::lds_stride_B
-                                  + (warp_n_base + wn * wmma_tile + half_lane);
-                half* dest = reinterpret_cast<half*>(&b_frag[wn]);
-#pragma unroll
-                for(int i = 0; i < wmma_tile; ++i)
-                {
-                    *dest++ = *src;
-                    src += config_wbv::lds_stride_B;
-                }
-            }
-
-            // Compute: each warp performs WMMA on its fragments.
+            // Compute using the current fragments
             for(int wm = 0; wm < config_wbv::warp_tile_m; ++wm)
             {
                 for(int wn = 0; wn < config_wbv::warp_tile_n; ++wn)
                 {
-                    c_frags[wm][wn] = __builtin_amdgcn_wmma_f16_16x16x16_f16_w32(a_frag[wm],
-                                                                                 b_frag[wn],
+                    c_frags[wm][wn] = __builtin_amdgcn_wmma_f16_16x16x16_f16_w32(compute_a_frag[wm],
+                                                                                 compute_b_frag[wn],
                                                                                  c_frags[wm][wn],
                                                                                  false);
                 }
+            }
+
+            // Skip fragment buffer swapping on the very last iteration
+            if(k_offset + wmma_tile < config_wbv::block_k)
+            {
+                // Swap fragment buffers
+                half16* temp_a = compute_a_frag;
+                half16* temp_b = compute_b_frag;
+                compute_a_frag = load_a_frag;
+                compute_b_frag = load_b_frag;
+                load_a_frag    = temp_a;
+                load_b_frag    = temp_b;
             }
         }
 
@@ -346,7 +398,8 @@ __global__ void kernel_hgemm<kernel_type::wmma_shared_warp_buf_vec>(
             for(int i = 0; i < wmma_tile / 2; ++i)
             {
                 const int row = i * 2 + half_warp_id;
-                if(block_row + warp_m_base + row < M && block_col + n_offset < N)
+                if(block_row + warp_m_base + wm * wmma_tile + row < M
+                   && block_col + warp_n_base + n_offset < N)
                     C_row[row * N + n_offset] = c_frags[wm][wn][i * 2];
             }
         }
