@@ -38,6 +38,8 @@ enum class kernel_type
     wmma_shared_warp_buf,
     wmma_shared_warp_vec,
     wmma_shared_warp_buf_vec,
+    wmma_prefetch,
+    wmma_opt_1,
     rocblas
 };
 

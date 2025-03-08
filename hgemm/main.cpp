@@ -163,6 +163,8 @@ inline const char* kernel_type_string(kernel_type type)
         case kernel_type::wmma_shared_warp_buf_vec:
             return "WMMA + Shared Memory + Warp Tiling + Double Buffering + Global "
                    "Vectorized Loads";
+        case kernel_type::wmma_prefetch: return "WMMA Prefetch";
+        case kernel_type::wmma_opt_1: return "WMMA Optimized V1";
         case kernel_type::rocblas: return "rocBLAS";
         default: return "Unknown";
     }
@@ -214,7 +216,9 @@ int main(int argc, char** argv)
                     kernel_type::wmma_shared_warp,
                     kernel_type::wmma_shared_warp_buf,
                     kernel_type::wmma_shared_warp_vec,
-                    kernel_type::wmma_shared_warp_buf_vec
+                    kernel_type::wmma_shared_warp_buf_vec,
+                    kernel_type::wmma_prefetch,
+                    kernel_type::wmma_opt_1
                     >(config);
 
     init_rocblas();

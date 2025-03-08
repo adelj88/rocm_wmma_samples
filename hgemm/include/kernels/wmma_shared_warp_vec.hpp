@@ -58,7 +58,7 @@ using config_wv = wmma_config<kernel_type::wmma_shared_warp_vec>;
 
 /**
  * @brief Half-precision GEMM using WMMA with shared memory, warp tiling and vectorized
- * global loads using half8 vectors
+ * global loads using half16 vectors
  *
  * This kernel combines WMMA operations with shared memory, warp-level tiling and vectorized
  * global loads.

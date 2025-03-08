@@ -28,50 +28,58 @@ Performance measured on AMD Radeon RX 7900 GRE on Windows and WSL2 (HIP SDK 6.2.
 ### Performance for 1024x1024 Matrix Multiplication
 | Implementation | Windows Time (ms) | Windows TFLOPs/s | WSL2 Time (ms) | WSL2 TFLOPs/s |
 |----------------|-------------------|-------------------|----------------|---------------|
-| Shared Memory | 0.578 | 3.76 | 0.579 | 3.75 |
-| WMMA Naive | 0.413 | 5.26 | 0.423 | 5.14 |
-| WMMA + Shared Memory | 0.219 | 9.93 | 0.220 | 9.87 |
-| WMMA + Shared Memory + Warp Tiling | 0.412 | 5.28 | 0.342 | 6.36 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering | 0.406 | 5.36 | 0.337 | 6.45 |
-| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 0.118 | 18.42 | 0.119 | 18.27 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 0.120 | 18.12 | 0.119 | 18.27 |
-| rocBLAS | 0.060 | 36.29 | 0.057 | 38.19 |
+| Shared Memory | 0.572 | 3.80 | 0.576 | 3.78 |
+| WMMA Naive | 0.410 | 5.31 | 0.425 | 5.12 |
+| WMMA + Shared Memory | 0.215 | 10.10 | 0.222 | 9.81 |
+| WMMA + Shared Memory + Warp Tiling | 0.406 | 5.36 | 0.341 | 6.37 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering | 0.403 | 5.39 | 0.335 | 6.50 |
+| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 0.118 | 18.42 | 0.122 | 17.87 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 0.116 | 18.78 | 0.118 | 18.45 |
+| WMMA Prefetch | 0.113 | 19.25 | 0.124 | 17.52 |
+| WMMA Optimized V1 | 0.109 | 19.98 | 0.114 | 19.04 |
+| rocBLAS | 0.059 | 36.87 | 0.052 | 41.74 |
 
 ### Performance for 2048x2048 Matrix Multiplication
 | Implementation | Windows Time (ms) | Windows TFLOPs/s | WSL2 Time (ms) | WSL2 TFLOPs/s |
 |----------------|-------------------|-------------------|----------------|---------------|
-| Shared Memory | 4.693 | 3.67 | 4.685 | 3.67 |
-| WMMA Naive | 3.474 | 4.96 | 3.251 | 5.29 |
-| WMMA + Shared Memory | 1.586 | 10.84 | 1.393 | 12.34 |
-| WMMA + Shared Memory + Warp Tiling | 0.913 | 18.83 | 0.757 | 22.72 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering | 0.873 | 19.69 | 0.726 | 23.68 |
-| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 0.328 | 52.42 | 0.343 | 50.14 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 0.336 | 51.14 | 0.344 | 50.00 |
-| rocBLAS | 0.248 | 69.34 | 0.250 | 68.76 |
+| Shared Memory | 4.710 | 3.65 | 4.728 | 3.64 |
+| WMMA Naive | 3.544 | 4.86 | 3.227 | 5.33 |
+| WMMA + Shared Memory | 1.574 | 10.92 | 1.385 | 12.42 |
+| WMMA + Shared Memory + Warp Tiling | 0.917 | 18.76 | 0.769 | 22.37 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering | 0.892 | 19.29 | 0.731 | 23.52 |
+| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 0.331 | 52.00 | 0.339 | 50.76 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 0.332 | 51.85 | 0.354 | 48.59 |
+| WMMA Prefetch | 0.344 | 49.96 | 0.362 | 47.52 |
+| WMMA Optimized V1 | 0.323 | 53.28 | 0.340 | 50.57 |
+| rocBLAS | 0.248 | 69.36 | 0.243 | 70.76 |
 
 ### Performance for 4096x4096 Matrix Multiplication
 | Implementation | Windows Time (ms) | Windows TFLOPs/s | WSL2 Time (ms) | WSL2 TFLOPs/s |
 |----------------|-------------------|-------------------|----------------|---------------|
-| Shared Memory | 36.912 | 3.73 | 37.429 | 3.67 |
-| WMMA Naive | 23.477 | 5.86 | 21.456 | 6.40 |
-| WMMA + Shared Memory | 11.036 | 12.47 | 11.030 | 12.48 |
-| WMMA + Shared Memory + Warp Tiling | 6.213 | 22.16 | 6.249 | 22.00 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering | 5.395 | 25.51 | 6.103 | 22.54 |
-| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 2.302 | 59.78 | 2.305 | 59.69 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 2.176 | 63.24 | 2.203 | 62.44 |
-| rocBLAS | 1.794 | 76.67 | 1.805 | 76.22 |
+| Shared Memory | 36.941 | 3.72 | 37.337 | 3.69 |
+| WMMA Naive | 23.408 | 5.88 | 21.522 | 6.39 |
+| WMMA + Shared Memory | 10.296 | 13.37 | 10.958 | 12.56 |
+| WMMA + Shared Memory + Warp Tiling | 6.203 | 22.18 | 6.197 | 22.21 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering | 6.066 | 22.69 | 6.076 | 22.65 |
+| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 2.238 | 61.50 | 2.309 | 59.59 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 2.198 | 62.65 | 2.255 | 61.01 |
+| WMMA Prefetch | 2.234 | 61.62 | 2.301 | 59.80 |
+| WMMA Optimized V1 | 2.094 | 65.71 | 2.133 | 64.51 |
+| rocBLAS | 1.749 | 78.65 | 1.740 | 79.04 |
 
 ### Performance for 8192x8192 Matrix Multiplication
 | Implementation | Windows Time (ms) | Windows TFLOPs/s | WSL2 Time (ms) | WSL2 TFLOPs/s |
 |----------------|-------------------|-------------------|----------------|---------------|
-| Shared Memory | 323.825 | 3.40 | 329.053 | 3.34 |
-| WMMA Naive | 196.329 | 5.60 | 200.475 | 5.49 |
-| WMMA + Shared Memory | 93.942 | 11.71 | 94.244 | 11.67 |
-| WMMA + Shared Memory + Warp Tiling | 42.432 | 25.92 | 42.469 | 25.90 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering | 41.069 | 26.78 | 40.773 | 26.98 |
-| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 17.530 | 62.75 | 17.542 | 62.71 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 16.808 | 65.45 | 16.872 | 65.20 |
-| rocBLAS | 14.174 | 77.61 | 14.245 | 77.23 |
+| Shared Memory | 322.962 | 3.40 | 328.631 | 3.35 |
+| WMMA Naive | 195.017 | 5.64 | 199.790 | 5.51 |
+| WMMA + Shared Memory | 93.346 | 11.78 | 94.057 | 11.70 |
+| WMMA + Shared Memory + Warp Tiling | 42.220 | 26.06 | 42.201 | 26.07 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering | 40.874 | 26.91 | 40.517 | 27.15 |
+| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 17.475 | 63.06 | 17.471 | 63.07 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 17.063 | 64.58 | 17.116 | 64.37 |
+| WMMA Prefetch | 17.116 | 64.38 | 17.308 | 63.67 |
+| WMMA Optimized V1 | 15.726 | 70.07 | 16.093 | 68.48 |
+| rocBLAS | 14.110 | 78.09 | 14.154 | 77.85 |
 
 ## Verification Process
 
