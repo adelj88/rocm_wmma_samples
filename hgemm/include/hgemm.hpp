@@ -30,6 +30,7 @@
 #include <kernels/shared.hpp>
 #include <kernels/wmma.hpp>
 #include <kernels/wmma_opt_1.hpp>
+#include <kernels/wmma_opt_2.hpp>
 #include <kernels/wmma_prefetch.hpp>
 #include <kernels/wmma_shared.hpp>
 #include <kernels/wmma_shared_warp.hpp>
@@ -204,8 +205,7 @@ bool verify_results(const matrix<half, L>& gpu_result, const matrix<half, L>& cp
               << " (threshold: " << ssim_threshold << ")" << std::endl;
 
     // Overall pass requires all criteria to be met
-    // For FP16 GEMM in machine learning contexts, you might choose to make element-wise optional
-    bool passed = matrix_norm_pass && pattern_pass; // Element-wise is now optional
+    bool passed = element_wise_pass && matrix_norm_pass && pattern_pass;
     std::cout << "Overall validation: " << (passed ? "PASSED" : "FAILED") << std::endl;
 
     return passed;
