@@ -144,10 +144,14 @@ __global__ void kernel_hgemm<kernel_type::wmma_shared_warp_vec>(
                 for(int v = 0; v < config_wv::vector_width; v++)
                 {
                     if(block_row + row + v < M && k_tile + col < K)
+                    {
                         a_tiles[col * config_wv::lds_stride_A + row + v]
                             = A_tile_ptr[col * M + row + v];
+                    }
                     else
+                    {
                         a_tiles[col * config_wv::lds_stride_A + row + v] = static_cast<half>(0.0f);
+                    }
                 }
             }
         }
@@ -173,10 +177,14 @@ __global__ void kernel_hgemm<kernel_type::wmma_shared_warp_vec>(
                 for(int v = 0; v < config_wv::vector_width; v++)
                 {
                     if(k_tile + row < K && block_col + col + v < N)
+                    {
                         b_tiles[row * config_wv::lds_stride_B + col + v]
                             = B_tile_ptr[row * N + col + v];
+                    }
                     else
+                    {
                         b_tiles[row * config_wv::lds_stride_B + col + v] = static_cast<half>(0.0f);
+                    }
                 }
             }
         }
@@ -246,8 +254,11 @@ __global__ void kernel_hgemm<kernel_type::wmma_shared_warp_vec>(
             for(int i = 0; i < wmma_tile / 2; ++i)
             {
                 const int row = i * 2 + half_warp_id;
-                if(block_row + warp_m_base + row < M && block_col + n_offset < N)
+                if(block_row + warp_m_base + wm * wmma_tile + row < M
+                   && block_col + warp_n_base + n_offset < N)
+                {
                     C_row[row * N + n_offset] = c_frags[wm][wn][i * 2];
+                }
             }
         }
     }

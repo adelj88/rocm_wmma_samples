@@ -369,8 +369,11 @@ __global__ void kernel_hgemm<kernel_type::wmma_prefetch>(
             for(int i = 0; i < wmma_tile / 2; ++i)
             {
                 const int row = i * 2 + half_warp_id;
-                if(block_row + warp_m_base + row < M && block_col + n_offset < N)
+                if(block_row + warp_m_base + wm * wmma_tile + row < M
+                   && block_col + warp_n_base + n_offset < N)
+                {
                     C_row[row * N + n_offset] = c_frags[wm][wn][i * 2];
+                }
             }
         }
     }

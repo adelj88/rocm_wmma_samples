@@ -128,9 +128,13 @@ __global__ void kernel_hgemm<kernel_type::wmma_shared_warp>(
             const int row = i % config_w::block_m;
 
             if(block_row + row < M && k_tile + col < K)
+            {
                 a_tiles[col * config_w::lds_stride_A + row] = A_tile_ptr[col * M + row];
+            }
             else
+            {
                 a_tiles[col * config_w::lds_stride_A + row] = static_cast<half>(0.0f);
+            }
         }
 
         // Load B tile (of size block_k × block_n) into shared memory.
@@ -141,9 +145,13 @@ __global__ void kernel_hgemm<kernel_type::wmma_shared_warp>(
             const int col = i % config_w::block_n;
 
             if(k_tile + row < K && block_col + col < N)
+            {
                 b_tiles[row * config_w::lds_stride_B + col] = B_tile_ptr[row * N + col];
+            }
             else
+            {
                 b_tiles[row * config_w::lds_stride_B + col] = static_cast<half>(0.0f);
+            }
         }
 
         __syncthreads();
@@ -211,8 +219,11 @@ __global__ void kernel_hgemm<kernel_type::wmma_shared_warp>(
             for(int i = 0; i < wmma_tile / 2; ++i)
             {
                 const int row = i * 2 + half_warp_id;
-                if(block_row + warp_m_base + row < M && block_col + n_offset < N)
+                if(block_row + warp_m_base + wm * wmma_tile + row < M
+                   && block_col + warp_n_base + n_offset < N)
+                {
                     C_row[row * N + n_offset] = c_frags[wm][wn][i * 2];
+                }
             }
         }
     }

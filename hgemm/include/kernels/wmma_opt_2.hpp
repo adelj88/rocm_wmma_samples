@@ -166,9 +166,13 @@ __global__ void kernel_hgemm<kernel_type::wmma_opt_2>(
                 for(int v = 0; v < config_o2::vector_width; v++)
                 {
                     if(block_row + row + v < M && col < K)
+                    {
                         a_tiles_0[swrite + v] = A_tile_ptr[gload + v];
+                    }
                     else
+                    {
                         a_tiles_0[swrite + v] = static_cast<half>(0.0f);
+                    }
                 }
             }
         }
@@ -197,9 +201,13 @@ __global__ void kernel_hgemm<kernel_type::wmma_opt_2>(
                 for(int v = 0; v < config_o2::vector_width; v++)
                 {
                     if(row < K && block_col + col + v < N)
+                    {
                         b_tiles_0[swrite + v] = B_tile_ptr[gload + v];
+                    }
                     else
+                    {
                         b_tiles_0[swrite + v] = static_cast<half>(0.0f);
+                    }
                 }
             }
         }
@@ -239,9 +247,13 @@ __global__ void kernel_hgemm<kernel_type::wmma_opt_2>(
                     for(int v = 0; v < config_o2::vector_width; v++)
                     {
                         if(block_row + row + v < M && k_tile + config_o2::block_k + col < K)
+                        {
                             next_a[swrite + v] = next_A[gload + v];
+                        }
                         else
+                        {
                             next_a[swrite + v] = static_cast<half>(0.0f);
+                        }
                     }
                 }
             }
@@ -364,9 +376,13 @@ __global__ void kernel_hgemm<kernel_type::wmma_opt_2>(
                     for(int v = 0; v < config_o2::vector_width; v++)
                     {
                         if(k_tile + config_o2::block_k + row < K && block_col + col + v < N)
+                        {
                             next_b[swrite + v] = next_B[gload + v];
+                        }
                         else
+                        {
                             next_b[swrite + v] = static_cast<half>(0.0f);
+                        }
                     }
                 }
             }
@@ -397,7 +413,9 @@ __global__ void kernel_hgemm<kernel_type::wmma_opt_2>(
                 const int row = i * 2 + half_warp_id;
                 if(block_row + warp_m_base + wm * wmma_tile + row < M
                    && block_col + warp_n_base + n_offset < N)
+                {
                     C_row[row * N + n_offset] = c_frags[wm][wn][i * 2];
+                }
             }
         }
     }
