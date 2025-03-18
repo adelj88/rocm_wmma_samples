@@ -32,14 +32,14 @@ template<>
 struct wmma_config<kernel_type::wmma_shared_warp_buf_vec>
 {
     static constexpr int warps_m     = 4;
-    static constexpr int warps_n     = 4;
+    static constexpr int warps_n     = 2;
     static constexpr int total_warps = warps_m * warps_n;
 
-    static constexpr int warp_tile_m = 4;
+    static constexpr int warp_tile_m = 2;
     static constexpr int warp_tile_n = 4;
 
-    static constexpr int block_m = warps_m * warp_tile_m * wmma_tile; // 4*4*16 = 256
-    static constexpr int block_n = warps_n * warp_tile_n * wmma_tile; // 4*4*16 = 256
+    static constexpr int block_m = warps_m * warp_tile_m * wmma_tile; // 4*2*16 = 128
+    static constexpr int block_n = warps_n * warp_tile_n * wmma_tile; // 2*4*16 = 128
     static constexpr int block_k = 32;
 
     // For A (stored column-major), each column has block_m elements.
