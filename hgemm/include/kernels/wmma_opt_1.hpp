@@ -203,6 +203,7 @@ __global__ void kernel_hgemm<kernel_type::wmma_opt_1>(
             }
         }
     }
+    __syncthreads();
 
     half* current_a = a_tiles_0;
     half* current_b = b_tiles_0;
@@ -212,7 +213,6 @@ __global__ void kernel_hgemm<kernel_type::wmma_opt_1>(
     // Main loop over k-dimension
     for(int k_tile = 0; k_tile < K; k_tile += config_o1::block_k)
     {
-        __syncthreads();
         if(tid >= half_block && k_tile + config_o1::block_k < K)
         {
             const half* next_A = A_tile_ptr + M * config_o1::block_k;
@@ -389,6 +389,7 @@ __global__ void kernel_hgemm<kernel_type::wmma_opt_1>(
         current_b    = next_b;
         next_a       = temp_a;
         next_b       = temp_b;
+        __syncthreads();
     }
 
     // Write the computed fragments to global memory.
