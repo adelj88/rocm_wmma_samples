@@ -47,7 +47,6 @@ For project-specific plans and improvements, please see the individual project R
 
 This project was inspired by:
 - The [GPUOpen RDNA3 WMMA Tutorial](https://gpuopen.com/learn/wmma_on_rdna3/)
-- The excellent work on [rocWMMA](https://github.com/ROCm/rocWMMA), which should be used for real-world applications involving WMMA
 
 ## License
 

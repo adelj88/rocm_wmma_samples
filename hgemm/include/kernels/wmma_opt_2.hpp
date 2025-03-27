@@ -60,32 +60,35 @@ struct wmma_config<kernel_type::wmma_opt_2>
 using config_o2 = wmma_config<kernel_type::wmma_opt_2>;
 
 /**
- * @brief Half-precision GEMM using WMMA with shared memory, shared/fragment double buffering,
- * warp tiling, cooperative loading, grid-level swizzling, and vectorized global loads using half16 vectors
- *
- * This kernel combines WMMA operations with shared memory, double buffering,
- * warp-level tiling and vectorized global loads. It uses double buffering at the shared and fragment
- * level to overlap computation with memory operations, maximizing hardware utilization and hiding
- * memory latency. Additionally, cooperative loading is used to load both A and B to shared memory
- * in parallel. The kernel also incorporates grid-level swizzling for improved L2 cache locality.
- *
- * @tparam K_TYPE The type of kernel, should be 'kernel_type::wmma_opt_2'
- * @param[out] C  Output matrix of size M × N
- * @param[in]  A  Input matrix A of size M × K (stored in column-major format)
- * @param[in]  B  Input matrix B of size K × N (stored in row-major format)
- * @param[in]  M  Number of rows in matrices A and C
- * @param[in]  N  Number of columns in matrices B and C
- * @param[in]  K  Number of columns in matrix A/rows in matrix B
- *
- * @note Implements double-buffering at global->shared, and shared->fragment
- * @note Each warp processes a 4×4 grid of 16×16 WMMA tiles
- * @note Uses shared memory tiles of size (block_m × block_k) for A and (block_k × block_n) for B
- * @note Employs a 4×4 warp grid configuration within each thread block
- * @note Uses grid-level swizzling for improved cache locality
- */
+   * @brief Half-precision GEMM using WMMA with shared memory, shared double buffering,
+   * warp tiling, cooperative loading, grid-level swizzling, and vectorized global loads using half16 vectors
+   *
+   * This kernel combines WMMA operations with shared memory, double buffering,
+   * warp-level tiling and vectorized global loads. It uses double buffering at the shared
+   * level to overlap computation with memory operations, maximizing hardware utilization and hiding
+   * memory latency. Additionally, cooperative loading is used to load both A and B to shared memory
+   * in parallel. The kernel also incorporates grid-level swizzling for improved L2 cache locality.
+   * This kernel also re-orders fragment loading to improve efficiency and uses
+   * __launch_bounds__ to limit register pressure.
+   *
+   * @tparam K_TYPE The type of kernel, should be 'kernel_type::wmma_opt_2'
+   * @param[out] C  Output matrix of size M × N
+   * @param[in]  A  Input matrix A of size M × K (stored in column-major format)
+   * @param[in]  B  Input matrix B of size K × N (stored in row-major format)
+   * @param[in]  M  Number of rows in matrices A and C
+   * @param[in]  N  Number of columns in matrices B and C
+   * @param[in]  K  Number of columns in matrix A/rows in matrix B
+   *
+   * @note Implements double-buffering at global->shared
+   * @note Each warp processes a 4×4 grid of 16×16 WMMA tiles
+   * @note Uses shared memory tiles of size (block_m × block_k) for A and (block_k × block_n) for B
+   * @note Employs a 4×4 warp grid configuration within each thread block
+   * @note Uses grid-level swizzling for improved cache locality
+   */
 template<>
-__global__ void kernel_hgemm<kernel_type::wmma_opt_2>(
-    half* C, const half* A, const half* B, int M, int N, int K)
+__global__ void
+    __launch_bounds__(warp_size* config_o2::total_warps) kernel_hgemm<kernel_type::wmma_opt_2>(
+        half* C, const half* A, const half* B, int M, int N, int K)
 {
     // Calculate grid dimensions
     const int grid_m  = (M + config_o2::block_m - 1) / config_o2::block_m;
@@ -128,7 +131,8 @@ __global__ void kernel_hgemm<kernel_type::wmma_opt_2>(
     const int warp_col = warp_id % config_o2::warps_n;
 
     constexpr int half_warp    = warp_size / 2;
-    const int     half_warp_id = (tid % warp_size) / half_warp;
+    const int     lane_id      = (tid % warp_size);
+    const int     half_warp_id = lane_id / half_warp;
     const int     half_lane    = tid % half_warp;
 
     // Determine the base offsets for this warp's set of WMMA tiles.
@@ -137,12 +141,8 @@ __global__ void kernel_hgemm<kernel_type::wmma_opt_2>(
 
     // Declare fragment storage.
     half16 c_frags[config_o2::warp_tile_m][config_o2::warp_tile_n] = {};
-
-    // Two sets of fragments for double-buffering at the fragment level
-    half16 a_frag_0[config_o2::warp_tile_m] = {};
-    half16 a_frag_1[config_o2::warp_tile_m] = {};
-    half16 b_frag_0[config_o2::warp_tile_n] = {};
-    half16 b_frag_1[config_o2::warp_tile_n] = {};
+    half16 a_frag[config_o2::warp_tile_m]                          = {};
+    half16 b_frag[config_o2::warp_tile_n]                          = {};
 
     // Base pointers for the current A and B tiles.
     const half* A_tile_ptr = A_base;
@@ -266,94 +266,42 @@ __global__ void kernel_hgemm<kernel_type::wmma_opt_2>(
         }
 
         // Process the loaded block_k in wmma_tile chunks
-        // Simplified fragment-level double buffering
-        half16* compute_a_frag = a_frag_0;
-        half16* compute_b_frag = b_frag_0;
-        half16* load_a_frag    = a_frag_1;
-        half16* load_b_frag    = b_frag_1;
-
-        // Initial load of the first fragment set
-        for(int wm = 0; wm < config_o2::warp_tile_m; ++wm)
-        {
-            // Pointer to the start of the corresponding row in the A tile.
-            const half* src  = current_a + (warp_m_base + wm * wmma_tile + half_lane);
-            half*       dest = reinterpret_cast<half*>(&compute_a_frag[wm]);
-#pragma unroll
-            for(int i = 0; i < wmma_tile; ++i)
-            {
-                *dest++ = *src;
-                src += config_o2::lds_stride_A;
-            }
-        }
-
-        for(int wn = 0; wn < config_o2::warp_tile_n; ++wn)
-        {
-            const half* src  = current_b + (warp_n_base + wn * wmma_tile + half_lane);
-            half*       dest = reinterpret_cast<half*>(&compute_b_frag[wn]);
-#pragma unroll
-            for(int i = 0; i < wmma_tile; ++i)
-            {
-                *dest++ = *src;
-                src += config_o2::lds_stride_B;
-            }
-        }
-
-        // Process with double-buffered fragments - only load next fragment if needed
         for(int k_offset = 0; k_offset < config_o2::block_k; k_offset += wmma_tile)
         {
-            // If this isn't the last iteration, preload the next fragment
-            if(k_offset + wmma_tile < config_o2::block_k)
-            {
-                // Preload next fragment set
-                const int next_k_offset = k_offset + wmma_tile;
+            const half* curr_a
+                = current_a + k_offset * config_o2::lds_stride_A + (warp_m_base + half_lane);
+            const half* curr_b
+                = current_b + k_offset * config_o2::lds_stride_B + (warp_n_base + half_lane);
 
-                // Preload next A fragments
+#pragma unroll
+            for(int i = 0; i < wmma_tile; ++i)
+            {
+                const half* srca = curr_a + (i * config_o2::lds_stride_A);
                 for(int wm = 0; wm < config_o2::warp_tile_m; ++wm)
                 {
-                    const half* src = current_a + next_k_offset * config_o2::lds_stride_A
-                                      + (warp_m_base + wm * wmma_tile + half_lane);
-                    half* dest = reinterpret_cast<half*>(&load_a_frag[wm]);
-#pragma unroll
-                    for(int i = 0; i < wmma_tile; ++i)
-                    {
-                        *dest++ = *src;
-                        src += config_o2::lds_stride_A;
-                    }
+                    a_frag[wm][i] = *srca;
+                    srca += wmma_tile;
                 }
 
-                // Preload next B fragments
+                const half* srcb = curr_b + (i * config_o2::lds_stride_B);
                 for(int wn = 0; wn < config_o2::warp_tile_n; ++wn)
                 {
-                    const half* src = current_b + next_k_offset * config_o2::lds_stride_B
-                                      + (warp_n_base + wn * wmma_tile + half_lane);
-                    half* dest = reinterpret_cast<half*>(&load_b_frag[wn]);
-#pragma unroll
-                    for(int i = 0; i < wmma_tile; ++i)
-                    {
-                        *dest++ = *src;
-                        src += config_o2::lds_stride_B;
-                    }
+                    b_frag[wn][i] = *srcb;
+                    srcb += wmma_tile;
                 }
             }
 
+            // Compute: each warp performs WMMA on its fragments.
             for(int wm = 0; wm < config_o2::warp_tile_m; ++wm)
             {
                 for(int wn = 0; wn < config_o2::warp_tile_n; ++wn)
                 {
-                    c_frags[wm][wn] = __builtin_amdgcn_wmma_f16_16x16x16_f16_w32(compute_a_frag[wm],
-                                                                                 compute_b_frag[wn],
+                    c_frags[wm][wn] = __builtin_amdgcn_wmma_f16_16x16x16_f16_w32(a_frag[wm],
+                                                                                 b_frag[wn],
                                                                                  c_frags[wm][wn],
                                                                                  false);
                 }
             }
-
-            // Swap fragment buffers
-            half16* temp_a = compute_a_frag;
-            half16* temp_b = compute_b_frag;
-            compute_a_frag = load_a_frag;
-            compute_b_frag = load_b_frag;
-            load_a_frag    = temp_a;
-            load_b_frag    = temp_b;
         }
 
         if(tid < half_block && k_tile + config_o2::block_k < K)
@@ -429,17 +377,17 @@ __global__ void kernel_hgemm<kernel_type::wmma_opt_2>(
 }
 
 /**
-   * Function Definition for calling WMMA Optimized V2 GEMM kernel
-   *
-   * @tparam K_TYPE The type of kernel, should be 'kernel_type::wmma_opt_2'
-   * @param C       Output matrix
-   * @param A       Input matrix A (stored in column-major format)
-   * @param B       Input matrix B (stored in row-major format)
-   * @param M       Number of rows in matrices A and C
-   * @param N       Number of columns in matrices B and C
-   * @param K       Number of columns in matrix A/rows in matrix B
-   * @param stream  HIP stream to execute kernel
-   */
+     * Function Definition for calling WMMA Optimized V2 GEMM kernel
+     *
+     * @tparam K_TYPE The type of kernel, should be 'kernel_type::wmma_opt_2'
+     * @param C       Output matrix
+     * @param A       Input matrix A (stored in column-major format)
+     * @param B       Input matrix B (stored in row-major format)
+     * @param M       Number of rows in matrices A and C
+     * @param N       Number of columns in matrices B and C
+     * @param K       Number of columns in matrix A/rows in matrix B
+     * @param stream  HIP stream to execute kernel
+     */
 template<>
 __host__ void hgemm_gpu<kernel_type::wmma_opt_2>(
     half* C, half* A, half* B, size_t M, size_t N, size_t K, hipStream_t& stream)

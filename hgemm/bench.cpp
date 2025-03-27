@@ -108,6 +108,7 @@ void run_benchmark(benchmark::State& state, size_t M, size_t N, size_t K)
         hgemm_gpu<K_TYPE>(d_C, d_A, d_B, M, N, K, stream);
         HIP_CHECK(hipPeekAtLastError());
         float elapsed_time = timer.stop(stream);
+        HIP_CHECK(hipDeviceSynchronize());
         state.SetIterationTime(elapsed_time / 1000);
     }
 
