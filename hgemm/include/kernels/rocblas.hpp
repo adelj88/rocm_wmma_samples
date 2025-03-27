@@ -91,8 +91,6 @@ __host__ void hgemm_gpu<kernel_type::rocblas>(
     const rocblas_half alpha     = *reinterpret_cast<const rocblas_half*>(&tmp_alpha);
     const rocblas_half beta      = *reinterpret_cast<const rocblas_half*>(&tmp_beta);
 
-    //transpose_matrix(A, A, M, K, stream);
-
     const rocblas_half* rocblas_B = reinterpret_cast<const rocblas_half*>(B);
     const rocblas_half* rocblas_A = reinterpret_cast<const rocblas_half*>(A);
     rocblas_half*       rocblas_C = reinterpret_cast<rocblas_half*>(C);
@@ -106,9 +104,9 @@ __host__ void hgemm_gpu<kernel_type::rocblas>(
                            K, // K
                            &alpha,
                            rocblas_A, // A (col-major input)
-                           K, // lda
+                           M, // lda
                            rocblas_B, // B (row-major input)
-                           K, // ldb
+                           N, // ldb
                            &beta,
                            rocblas_C, // C (col-major output)
                            M); // ldc
