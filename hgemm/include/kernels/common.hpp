@@ -103,6 +103,86 @@ __device__ __forceinline__ void
 }
 
 /**
+   * @brief Helper function for Hilbert-curve tile mapping
+   *
+   * Computes block indices using a Hilbert-curve mapping to improve L2 cache locality.
+   * This is applied at the grid level to change the order in which tiles are processed.
+   *
+   * @param[in]  tile_id    Linear block ID
+   * @param[in]  grid_m     Number of blocks in M dimension
+   * @param[in]  grid_n     Number of blocks in N dimension
+   * @param[out] block_row  Computed block row (M dimension)
+   * @param[out] block_col  Computed block column (N dimension)
+   */
+template<int BLOCK_M, int BLOCK_N>
+__device__ __forceinline__ void
+    hilbert_tile_mapping(int tile_id, int grid_m, int grid_n, int* block_row, int* block_col)
+{
+    // Find power of 2 that covers the grid using bit manipulation
+    // This is much faster than a loop
+    uint32_t max_dim = max(grid_m, grid_n);
+    uint32_t n       = max_dim;
+    n--;
+    n |= n >> 1;
+    n |= n >> 2;
+    n |= n >> 4;
+    n |= n >> 8;
+    n |= n >> 16;
+    n++;
+
+    uint32_t index = tile_id;
+    uint32_t x = 0, y = 0;
+
+// Fast path for powers of 2 using bit interleaving technique
+#pragma unroll 16 // Unroll for better instruction-level parallelism
+    for(uint32_t i = 0; i < 16; ++i)
+    { // Assuming max 2^16 x 2^16 grid
+        if((n >> i) == 0)
+        {
+            break; // Early termination
+        }
+
+        // Extract 2 bits from index
+        uint32_t bits = (index >> (i * 2)) & 3;
+
+        // Use lookup table approach for the rotation logic (better for GPU)
+        switch(bits)
+        {
+            case 0:
+                { // Lower left quadrant (reflect and swap)
+                    uint32_t temp = x;
+                    x             = y;
+                    y             = temp;
+                    break;
+                }
+            case 1:
+                { // Lower right quadrant
+                    y |= (1U << i);
+                    break;
+                }
+            case 2:
+                { // Upper right quadrant
+                    x |= (1U << i);
+                    y |= (1U << i);
+                    break;
+                }
+            case 3:
+                { // Upper left quadrant (reflect and swap)
+                    uint32_t temp = (1U << i) - 1 - y;
+                    y             = (1U << i) - 1 - x;
+                    x             = temp;
+                    x |= (1U << i);
+                    break;
+                }
+        }
+    }
+
+    // Convert to actual block coordinates with bit shift for multiplication
+    *block_row = y << (__ffs(BLOCK_M) - 1);
+    *block_col = x << (__ffs(BLOCK_N) - 1);
+}
+
+/**
  * @brief Calculate ceiling division of two integers
  * @param a Dividend
  * @param b Divisor

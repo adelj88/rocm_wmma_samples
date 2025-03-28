@@ -52,22 +52,19 @@ struct wmma_config<kernel_type::wmma_opt_2>
     // Vector loading configuration
     static constexpr int vector_width = 16;
     using vector_type                 = half16;
-
-    // Swizzling parameters
-    static constexpr int group_size_m = 8; // Number of consecutive tiles to process in M dimension
 };
 
 using config_o2 = wmma_config<kernel_type::wmma_opt_2>;
 
 /**
    * @brief Half-precision GEMM using WMMA with shared memory, shared double buffering,
-   * warp tiling, cooperative loading, grid-level swizzling, and vectorized global loads using half16 vectors
+   * warp tiling, cooperative loading, Hilbert-curve mapping, and vectorized global loads using half16 vectors
    *
    * This kernel combines WMMA operations with shared memory, double buffering,
    * warp-level tiling and vectorized global loads. It uses double buffering at the shared
    * level to overlap computation with memory operations, maximizing hardware utilization and hiding
    * memory latency. Additionally, cooperative loading is used to load both A and B to shared memory
-   * in parallel. The kernel also incorporates grid-level swizzling for improved L2 cache locality.
+   * in parallel. The kernel also incorporates Hilbert-curve mapping for improved L2 cache locality.
    * This kernel also re-orders fragment loading to improve efficiency and uses
    * __launch_bounds__ to limit register pressure.
    *
@@ -83,7 +80,7 @@ using config_o2 = wmma_config<kernel_type::wmma_opt_2>;
    * @note Each warp processes a 4×4 grid of 16×16 WMMA tiles
    * @note Uses shared memory tiles of size (block_m × block_k) for A and (block_k × block_n) for B
    * @note Employs a 4×4 warp grid configuration within each thread block
-   * @note Uses grid-level swizzling for improved cache locality
+   * @note Uses Hilbert-curve mapping for improved cache locality
    */
 template<>
 __global__ void
@@ -95,9 +92,9 @@ __global__ void
     const int grid_n  = (N + config_o2::block_n - 1) / config_o2::block_n;
     const int tile_id = blockIdx.x;
 
-    // Get block coordinates using swizzled mapping
+    // Get block coordinates using hilbert mapping
     int block_row, block_col;
-    swizzle_tile_mapping<config_o2::group_size_m, config_o2::block_m, config_o2::block_n>(
+    hilbert_tile_mapping<config_o2::block_m, config_o2::block_n>(
         tile_id,
         grid_m,
         grid_n,
