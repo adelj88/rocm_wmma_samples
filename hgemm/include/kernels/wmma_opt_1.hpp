@@ -49,9 +49,9 @@ struct wmma_config<kernel_type::wmma_opt_1>
     // Total shared memory size: region for A plus region for B.
     static constexpr int lds_size = (block_m * block_k) + (block_k * block_n);
 
-    // Vector loading configuration
-    static constexpr int vector_width = 16;
-    using vector_type                 = half16;
+    // Vector loading configuration (256-bits = 2 128-bit loads)
+    using vector_type                 = float8;
+    static constexpr int vector_width = (sizeof(float8) / sizeof(half));
 };
 
 using config_o1 = wmma_config<kernel_type::wmma_opt_1>;

@@ -49,9 +49,10 @@ struct wmma_config<kernel_type::wmma_opt_2>
     // Total shared memory size: region for A plus region for B.
     static constexpr int lds_size = (block_m * block_k) + (block_k * block_n);
 
-    // Vector loading configuration
-    static constexpr int vector_width = 16;
-    using vector_type                 = half16;
+    // Vector loading configuration (256-bits = 2 128-bit loads)
+    using vector_type                 = float8;
+    static constexpr int vector_width = (sizeof(float8) / sizeof(half));
+
 };
 
 using config_o2 = wmma_config<kernel_type::wmma_opt_2>;
@@ -94,12 +95,11 @@ __global__ void
 
     // Get block coordinates using hilbert mapping
     int block_row, block_col;
-    hilbert_tile_mapping<config_o2::block_m, config_o2::block_n>(
-        tile_id,
-        grid_m,
-        grid_n,
-        &block_row,
-        &block_col);
+    hilbert_tile_mapping<config_o2::block_m, config_o2::block_n>(tile_id,
+                                                                 grid_m,
+                                                                 grid_n,
+                                                                 &block_row,
+                                                                 &block_col);
 
     // Allocate a unified shared memory buffer.
     __shared__ half lds_mem[2 * config_o2::lds_size];
@@ -351,25 +351,98 @@ __global__ void
         __syncthreads();
     }
 
-    // Write the computed fragments to global memory.
-    half* C_warp = C_base + warp_m_base * N + warp_n_base;
-    for(int wm = 0; wm < config_o2::warp_tile_m; wm++)
+    // Calculate the total size of the output tile
+    constexpr int total_tile_elements = config_o2::block_m * config_o2::block_n;
+
+    // Maximum shared memory available is the entire shared memory buffer
+    constexpr int max_shared_elements = 2 * config_o2::lds_size;
+
+    // Determine if we need to process in chunks or can handle the entire tile at once
+    constexpr bool needs_chunking = total_tile_elements > max_shared_elements;
+
+    // If chunking is needed, calculate how many rows we can process at once
+    // Otherwise, process the entire tile
+    constexpr int rows_per_chunk
+        = needs_chunking ? max_shared_elements / config_o2::block_n : config_o2::block_m;
+
+    // Reuse shared memory for storing C values
+    half* c_tile = lds_mem;
+
+    // Process the matrix in chunks
+    for(int chunk_idx = 0; chunk_idx < config_o2::block_m; chunk_idx += rows_per_chunk)
     {
-        half* C_row = C_warp + wm * wmma_tile * N;
-        for(int wn = 0; wn < config_o2::warp_tile_n; wn++)
+        // Calculate row range for this chunk
+        const int row_start    = chunk_idx;
+        const int row_end      = min(row_start + rows_per_chunk, config_o2::block_m);
+        const int chunk_height = row_end - row_start;
+
+        // Step 1: Store WMMA fragments to shared memory
+        for(int wm = 0; wm < config_o2::warp_tile_m; ++wm)
         {
-            const int n_offset = wn * wmma_tile + half_lane;
-#pragma unroll
-            for(int i = 0; i < wmma_tile / 2; ++i)
+            const int warp_m_global = warp_m_base + wm * wmma_tile;
+
+            // Skip warps not in the current chunk
+            if(warp_m_global < row_start || warp_m_global >= row_end)
             {
-                const int row = i * 2 + half_warp_id;
-                if(block_row + warp_m_base + wm * wmma_tile + row < M
-                   && block_col + warp_n_base + n_offset < N)
+                continue;
+            }
+
+            // Calculate local row offset within current chunk
+            const int warp_m_local = warp_m_global - row_start;
+
+            for(int wn = 0; wn < config_o2::warp_tile_n; ++wn)
+            {
+                const int warp_n_base_local = warp_n_base + wn * wmma_tile;
+
+#pragma unroll
+                for(int i = 0; i < wmma_tile / 2; ++i)
                 {
-                    C_row[row * N + n_offset] = c_frags[wm][wn][i * 2];
+                    const int row_local = warp_m_local + i * 2 + half_warp_id;
+                    const int col_local = warp_n_base_local + half_lane;
+
+                    // Store fragments directly to shared memory
+                    c_tile[row_local * config_o2::block_n + col_local] = c_frags[wm][wn][i * 2];
                 }
             }
         }
+        __syncthreads();
+
+        // Step 2: Perform vectorized writes from shared memory to global memory
+        // Each thread processes multiple vectors
+        for(int i = tid * config_o2::vector_width; i < (chunk_height * config_o2::block_n);
+            i += num_threads * config_o2::vector_width)
+        {
+
+            const int row_local = i / config_o2::block_n;
+            const int col_local = i % config_o2::block_n;
+
+            // Calculate global position
+            const int row_global = block_row + row_start + row_local;
+            const int col_global = block_col + col_local;
+
+            // Check if this vector is entirely within bounds
+            if(row_global < M && col_global + config_o2::vector_width - 1 < N)
+            {
+                // Full vector write
+                *reinterpret_cast<config_o2::vector_type*>(C_base + (row_start + row_local) * N
+                                                           + col_local)
+                    = *reinterpret_cast<const config_o2::vector_type*>(
+                        c_tile + row_local * config_o2::block_n + col_local);
+            }
+            else if(row_global < M)
+            {
+                // Handle boundary case element by element
+                for(int v = 0; v < config_o2::vector_width; v++)
+                {
+                    if(col_global + v < N)
+                    {
+                        C_base[(row_start + row_local) * N + col_local + v]
+                            = c_tile[row_local * config_o2::block_n + col_local + v];
+                    }
+                }
+            }
+        }
+        __syncthreads();
     }
 }
 
