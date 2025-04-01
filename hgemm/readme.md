@@ -23,7 +23,7 @@ This project aims to:
 
 ## Performance Highlights
 
-Performance measured on AMD Radeon RX 7900 GRE. All implementations use half precision (FP16).
+Performance measured on AMD Radeon RX 7900 GRE on Windows and WSL2 (HIP SDK 6.2.4). All implementations use half precision (FP16).
 
 Note: No tuning has been done for different sizes.
 
@@ -37,8 +37,8 @@ The table below shows key performance points in my optimization progression:
 | WMMA Naive     | 4.95 | 6.14 | 5.61 |
 | WMMA + Shared Memory | 10.48 | 13.22 | 11.68 |
 | ... | ... | ... | ... |
-| WMMA Optimized V2 | 46.56 | 65.14 | 72.34 |
-| rocBLAS | 55.06 | 71.58 | 76.89 |
+| WMMA Optimized V2 | 49.28 | 63.05 | 74.80 |
+| rocBLAS | 54.25 | 71.58 | 76.89 |
 
 [View detailed square matrix benchmarks](docs/general.md)
 
@@ -46,13 +46,13 @@ The table below shows key performance points in my optimization progression:
 
 The most optimized WMMA implementation `wmma_opt_2` is compared against `rocBLAS` on matrix dimensions common in transformer/LLM architectures:
 
-| Operation Type | Matrix Dimensions | WMMA (TFLOPs/s) | rocBLAS (TFLOPs/s) | WMMA/rocBLAS |
+| Operation Type | Matrix Dimensions | `wmma_opt_2` (TFLOPs/s) | `rocBLAS` (TFLOPs/s) | `wmma_opt_2`/`rocBLAS` |
 |----------------|-------------------|-----------------|-------------------|--------------|
-| FFN Second Layer | m=4096, n=4096, k=16384 | 68.13 | 53.82 | 126.6% |
-| Very Long Context | m=65536, n=2048, k=2048 | 65.31 | 61.91 | 105.5% |
-| Attention Score | m=4096, n=2048, k=64 | 12.43 | 12.63 | 98.4% |
+| FFN Second Layer | m=4096, n=4096, k=16384 | 64.65 | 53.20 | 121.5% |
+| Very Long Context | m=65536, n=2048, k=2048 | 71.83 | 58.35 | 123.1% |
+| Attention Score | m=4096, n=2048, k=64 | 12.13 | 11.15 | 108.8% |
 
-On average, `wmma_opt_2` achieves decent performance relative to rocBLAS across all tested LLM workloads without tuning.
+On average, `wmma_opt_2` achieves decent performance relative to `rocBLAS` across all tested LLM workloads without tuning.
 
 [View detailed LLM benchmarks](docs/llm_focus.md)
 
@@ -88,7 +88,7 @@ The verification system provides detailed feedback for each test:
 ## Known Issues
 
 1. Some test cases are skipped for `shared` and `wmma_naive`, as there are no intentions to fix them.
-2. rocBLAS fails some test cases (or throws an exception), so tests are skipped.
+2. `rocBLAS` fails some test cases (or throws an exception), so tests are skipped.
 
 ## Usage
 

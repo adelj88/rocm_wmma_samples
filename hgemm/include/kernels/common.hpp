@@ -188,7 +188,7 @@ __device__ __forceinline__ void
  * @param b Divisor
  * @return Ceiling of a/b
  */
-int ceil_div(int a, int b)
+int inline ceil_div(int a, int b)
 {
     return (a + b - 1) / b;
 }

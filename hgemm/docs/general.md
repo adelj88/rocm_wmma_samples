@@ -7,62 +7,62 @@ Note: Kernel parameters haven't been tuned for different sizes in the following 
 ## Performance for 1024x1024 Matrix Multiplication
 | Implementation | Windows Time (ms) | Windows TFLOPs/s | WSL2 Time (ms) | WSL2 TFLOPs/s |
 |----------------|-------------------|-------------------|----------------|---------------|
-| Shared Memory | 0.630 | 3.41 | 0.644 | 3.33 |
-| WMMA Naive | 0.467 | 4.60 | 0.473 | 4.54 |
-| WMMA + Shared Memory | 0.275 | 7.81 | 0.295 | 7.28 |
-| WMMA + Shared Memory + Warp Tiling | 0.367 | 5.85 | 0.389 | 5.52 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering | 0.364 | 5.90 | 0.378 | 5.68 |
-| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 0.161 | 13.34 | 0.177 | 12.13 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 0.160 | 13.42 | 0.175 | 12.27 |
-| WMMA Prefetch | 0.167 | 12.86 | 0.188 | 11.42 |
-| WMMA Optimized V1 | 0.156 | 13.77 | 0.163 | 13.17 |
-| WMMA Optimized V2 | 0.154 | 13.94 | 0.168 | 12.78 |
-| rocBLAS | 0.097 | 22.14 | 0.111 | 19.35 |
+| Shared Memory | 0.631 | 3.41 | 0.643 | 3.35 |
+| WMMA Naive | 0.483 | 4.45 | 0.471 | 4.57 |
+| WMMA + Shared Memory | 0.273 | 7.88 | 0.326 | 6.60 |
+| WMMA + Shared Memory + Warp Tiling | 0.373 | 5.77 | 0.387 | 5.56 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering | 0.371 | 5.80 | 0.380 | 5.67 |
+| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 0.162 | 13.28 | 0.175 | 12.29 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 0.164 | 13.11 | 0.170 | 12.65 |
+| WMMA Prefetch | 0.168 | 12.81 | 0.178 | 12.08 |
+| WMMA Optimized V1 | 0.154 | 13.96 | 0.164 | 13.11 |
+| WMMA Optimized V2 | 0.202 | 10.65 | 0.212 | 10.14 |
+| rocBLAS | 0.097 | 22.14 | 0.113 | 19.03 |
 
 ## Performance for 2048x2048 Matrix Multiplication
 | Implementation | Windows Time (ms) | Windows TFLOPs/s | WSL2 Time (ms) | WSL2 TFLOPs/s |
 |----------------|-------------------|-------------------|----------------|---------------|
-| Shared Memory | 4.720 | 3.64 | 4.940 | 3.48 |
-| WMMA Naive | 3.470 | 4.95 | 3.840 | 4.47 |
-| WMMA + Shared Memory | 1.640 | 10.48 | 1.640 | 10.48 |
-| WMMA + Shared Memory + Warp Tiling | 0.820 | 20.95 | 0.809 | 21.24 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering | 0.731 | 23.50 | 0.776 | 22.14 |
-| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 0.396 | 43.38 | 0.395 | 43.49 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 0.387 | 44.39 | 0.400 | 42.95 |
-| WMMA Prefetch | 0.404 | 42.52 | 0.399 | 43.06 |
-| WMMA Optimized V1 | 0.370 | 46.43 | 0.375 | 45.81 |
-| WMMA Optimized V2 | 0.369 | 46.56 | 0.368 | 46.68 |
-| rocBLAS | 0.312 | 55.06 | 0.297 | 57.84 |
+| Shared Memory | 5.040 | 3.40 | 4.740 | 3.62 |
+| WMMA Naive | 3.210 | 5.34 | 3.490 | 4.91 |
+| WMMA + Shared Memory | 1.360 | 12.61 | 1.670 | 10.27 |
+| WMMA + Shared Memory + Warp Tiling | 0.844 | 20.31 | 0.801 | 21.39 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering | 0.801 | 21.39 | 0.774 | 22.14 |
+| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 0.403 | 42.52 | 0.403 | 42.52 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 0.394 | 43.50 | 0.395 | 43.39 |
+| WMMA Prefetch | 0.411 | 41.70 | 0.397 | 43.17 |
+| WMMA Optimized V1 | 0.375 | 45.71 | 0.373 | 45.96 |
+| WMMA Optimized V2 | 0.348 | 49.28 | 0.353 | 48.57 |
+| rocBLAS | 0.316 | 54.25 | 0.307 | 55.81 |
 
 ## Performance for 4096x4096 Matrix Multiplication
 | Implementation | Windows Time (ms) | Windows TFLOPs/s | WSL2 Time (ms) | WSL2 TFLOPs/s |
 |----------------|-------------------|-------------------|----------------|---------------|
-| Shared Memory | 37.100 | 3.70 | 41.600 | 3.30 |
-| WMMA Naive | 22.400 | 6.14 | 22.400 | 6.14 |
-| WMMA + Shared Memory | 10.400 | 13.22 | 12.400 | 11.08 |
-| WMMA + Shared Memory + Warp Tiling | 6.320 | 21.75 | 6.580 | 20.89 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering | 5.510 | 24.94 | 6.530 | 21.05 |
-| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 2.690 | 51.09 | 2.370 | 57.99 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 2.660 | 51.67 | 2.340 | 58.73 |
-| WMMA Prefetch | 2.330 | 58.99 | 2.340 | 58.73 |
-| WMMA Optimized V1 | 2.180 | 63.05 | 2.150 | 63.93 |
-| WMMA Optimized V2 | 2.110 | 65.14 | 2.080 | 66.08 |
-| rocBLAS | 1.920 | 71.58 | 1.840 | 74.70 |
+| Shared Memory | 36.600 | 3.76 | 41.600 | 3.30 |
+| WMMA Naive | 21.800 | 6.30 | 22.200 | 6.19 |
+| WMMA + Shared Memory | 10.400 | 13.22 | 12.100 | 11.36 |
+| WMMA + Shared Memory + Warp Tiling | 6.300 | 21.82 | 6.690 | 20.55 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering | 6.190 | 22.21 | 6.440 | 21.34 |
+| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 2.350 | 58.47 | 2.500 | 54.96 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 2.300 | 59.73 | 2.380 | 57.75 |
+| WMMA Prefetch | 2.310 | 59.47 | 2.380 | 57.75 |
+| WMMA Optimized V1 | 2.150 | 63.93 | 2.170 | 63.34 |
+| WMMA Optimized V2 | 2.180 | 63.05 | 2.210 | 62.15 |
+| rocBLAS | 1.920 | 71.58 | 1.850 | 74.29 |
 
 ## Performance for 8192x8192 Matrix Multiplication
 | Implementation | Windows Time (ms) | Windows TFLOPs/s | WSL2 Time (ms) | WSL2 TFLOPs/s |
 |----------------|-------------------|-------------------|----------------|---------------|
-| Shared Memory | 326.000 | 3.37 | 327.000 | 3.36 |
-| WMMA Naive | 196.000 | 5.61 | 199.000 | 5.53 |
-| WMMA + Shared Memory | 94.100 | 11.68 | 94.300 | 11.66 |
+| Shared Memory | 324.000 | 3.39 | 327.000 | 3.36 |
+| WMMA Naive | 196.000 | 5.61 | 200.000 | 5.50 |
+| WMMA + Shared Memory | 93.700 | 11.74 | 94.200 | 11.67 |
 | WMMA + Shared Memory + Warp Tiling | 42.300 | 25.99 | 42.700 | 25.75 |
-| WMMA + Shared Memory + Warp Tiling + Double Buffering | 41.000 | 26.82 | 41.100 | 26.75 |
-| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 18.000 | 61.08 | 17.600 | 62.47 |
+| WMMA + Shared Memory + Warp Tiling + Double Buffering | 40.900 | 26.89 | 40.800 | 26.96 |
+| WMMA + Shared Memory + Warp Tiling + Global Vectorized Loads | 17.600 | 62.47 | 17.600 | 62.47 |
 | WMMA + Shared Memory + Warp Tiling + Double Buffering + Global Vectorized Loads | 17.200 | 63.93 | 17.300 | 63.56 |
-| WMMA Prefetch | 17.500 | 62.83 | 17.400 | 63.19 |
-| WMMA Optimized V1 | 15.700 | 70.03 | 16.100 | 68.29 |
-| WMMA Optimized V2 | 15.200 | 72.34 | 15.200 | 72.34 |
-| rocBLAS | 14.300 | 76.89 | 14.300 | 76.89 |
+| WMMA Prefetch | 17.200 | 63.93 | 17.400 | 63.19 |
+| WMMA Optimized V1 | 15.700 | 70.03 | 16.000 | 68.72 |
+| WMMA Optimized V2 | 14.700 | 74.80 | 14.800 | 74.29 |
+| rocBLAS | 14.300 | 76.89 | 14.200 | 77.42 |
 
 ## Analysis
 
