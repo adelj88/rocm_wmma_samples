@@ -26,6 +26,7 @@
 #include <common/hip_utils.hpp>
 #include <common/matrix.hpp>
 #include <hgemm.hpp>
+#include <iomanip>
 
 template<kernel_type K_TYPE>
 struct layout_selector
@@ -102,6 +103,9 @@ void run_benchmark(benchmark::State& state, size_t M, size_t N, size_t K)
     }
     HIP_CHECK(hipDeviceSynchronize());
 
+    double total_tflops = 0.0;
+    double total_flops  = 2.0 * M * N * K; // 2 operations per element (multiply and add)
+
     for(auto _ : state)
     {
         timer.start(stream);
@@ -109,9 +113,14 @@ void run_benchmark(benchmark::State& state, size_t M, size_t N, size_t K)
         HIP_CHECK(hipPeekAtLastError());
         float elapsed_time = timer.stop(stream);
         HIP_CHECK(hipDeviceSynchronize());
-        state.SetIterationTime(elapsed_time / 1000);
+
+        double seconds = elapsed_time / 1000.0;
+        state.SetIterationTime(seconds);
+        double tflops = (total_flops / seconds) * 1e-12;
+        total_tflops += tflops;
     }
 
+    state.counters["TFLOPS"] = total_tflops / state.iterations();
     state.SetBytesProcessed(state.iterations() * ((M * K) + (K * N) + (M * N)) * sizeof(half));
 
     if(K_TYPE == kernel_type::rocblas)

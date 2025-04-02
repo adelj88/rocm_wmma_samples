@@ -67,7 +67,7 @@ using config_o2 = wmma_config<kernel_type::wmma_opt_2>;
    * memory latency. Additionally, cooperative loading is used to load both A and B to shared memory
    * in parallel. The kernel also incorporates Hilbert-curve mapping for improved L2 cache locality.
    * This kernel also re-orders fragment loading to improve efficiency and uses
-   * __launch_bounds__ to limit register pressure.
+   * __launch_bounds__ to limit register pressure. -mcumode is also used to compile this kernel.
    *
    * @tparam K_TYPE The type of kernel, should be 'kernel_type::wmma_opt_2'
    * @param[out] C  Output matrix of size M × N

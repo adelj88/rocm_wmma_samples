@@ -37,8 +37,8 @@ The table below shows key performance points in my optimization progression:
 | WMMA Naive     | 4.95 | 6.14 | 5.61 |
 | WMMA + Shared Memory | 10.48 | 13.22 | 11.68 |
 | ... | ... | ... | ... |
-| WMMA Optimized V2 | 49.28 | 63.05 | 74.80 |
-| rocBLAS | 54.25 | 71.58 | 76.89 |
+| WMMA Optimized V2 | 44.93 | 61.48 | 74.54 |
+| rocBLAS | 50.86 | 70.88 | 76.74 |
 
 [View detailed square matrix benchmarks](docs/general.md)
 
@@ -48,9 +48,10 @@ The most optimized WMMA implementation `wmma_opt_2` is compared against `rocBLAS
 
 | Operation Type | Matrix Dimensions | `wmma_opt_2` (TFLOPs/s) | `rocBLAS` (TFLOPs/s) | `wmma_opt_2`/`rocBLAS` |
 |----------------|-------------------|-----------------|-------------------|--------------|
-| FFN Second Layer | m=4096, n=4096, k=16384 | 64.65 | 53.20 | 121.5% |
-| Very Long Context | m=65536, n=2048, k=2048 | 71.83 | 58.35 | 123.1% |
-| Attention Score | m=4096, n=2048, k=64 | 12.13 | 11.15 | 108.8% |
+| FFN Second Layer | m=4096, n=4096, k=16384 | 64.40 | 53.85 | 119.6% |
+| Very Long Context | m=65536, n=2048, k=2048 | 72.02 | 61.91 | 116.3% |
+| Attention Score | m=4096, n=2048, k=64 | 9.30 | 9.22 | 100.8% |
+| Attention Score (Large Batch) | m=8192, n=4096, k=128 | 31.99 | 37.42 | 85.5% |
 
 On average, `wmma_opt_2` achieves decent performance relative to `rocBLAS` across all tested LLM workloads without tuning.
 
