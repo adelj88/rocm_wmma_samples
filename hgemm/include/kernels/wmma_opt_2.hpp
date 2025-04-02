@@ -49,9 +49,9 @@ struct wmma_config<kernel_type::wmma_opt_2>
     // Total shared memory size: region for A plus region for B.
     static constexpr int lds_size = (block_m * block_k) + (block_k * block_n);
 
-    // Vector loading configuration (256-bits = 2 128-bit loads)
-    using vector_type                 = float8;
-    static constexpr int vector_width = (sizeof(float8) / sizeof(half));
+    // Vector loading configuration (512-bits = 4 128-bit loads)
+    using vector_type                 = float16;
+    static constexpr int vector_width = (sizeof(float16) / sizeof(half));
 
 };
 
@@ -59,7 +59,7 @@ using config_o2 = wmma_config<kernel_type::wmma_opt_2>;
 
 /**
    * @brief Half-precision GEMM using WMMA with shared memory, shared double buffering,
-   * warp tiling, cooperative loading, Hilbert-curve mapping, and vectorized global loads/writes using float8 vectors
+   * warp tiling, cooperative loading, Hilbert-curve mapping, and vectorized global 512-bit (4 128-bit) loads/writes
    *
    * This kernel combines WMMA operations with shared memory, double buffering,
    * warp-level tiling and vectorized global loads. It uses double buffering at the shared

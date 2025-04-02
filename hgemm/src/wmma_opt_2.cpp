@@ -188,10 +188,10 @@ __global__ void
             const half* curr_b
                 = current_b + k_offset * config_o2::lds_stride_B + (warp_n_base + half_lane);
 
-#pragma unroll
             for(int i = 0; i < wmma_tile; ++i)
             {
                 const half* srca = curr_a + (i * config_o2::lds_stride_A);
+#pragma unroll
                 for(int wm = 0; wm < config_o2::warp_tile_m; ++wm)
                 {
                     a_frag[wm][i] = *srca;
@@ -199,6 +199,7 @@ __global__ void
                 }
 
                 const half* srcb = curr_b + (i * config_o2::lds_stride_B);
+#pragma unroll
                 for(int wn = 0; wn < config_o2::warp_tile_n; ++wn)
                 {
                     b_frag[wn][i] = *srcb;
@@ -330,7 +331,6 @@ __global__ void
         for(int i = tid * config_o2::vector_width; i < (chunk_height * config_o2::block_n);
             i += num_threads * config_o2::vector_width)
         {
-
             const int row_local = i / config_o2::block_n;
             const int col_local = i % config_o2::block_n;
 

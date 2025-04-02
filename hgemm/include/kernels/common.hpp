@@ -54,6 +54,7 @@ typedef _Float16 half8 __attribute__((ext_vector_type(8)));
 typedef _Float16 half16 __attribute__((ext_vector_type(16)));
 
 typedef float float8 __attribute__((ext_vector_type(8)));
+typedef float float16 __attribute__((ext_vector_type(16)));
 
 template<kernel_type KT>
 struct wmma_config;

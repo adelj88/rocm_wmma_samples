@@ -58,7 +58,7 @@ using config_o1 = wmma_config<kernel_type::wmma_opt_1>;
 
 /**
  * @brief Half-precision GEMM using WMMA with shared memory, shared/fragment double buffering,
- * warp tiling, cooperative loading and vectorized global loads using float8 vectors
+ * warp tiling, cooperative loading and vectorized global 256-bit (2 128-bit) loads
  *
  * This kernel combines WMMA operations with shared memory, double buffering,
  * warp-level tiling and vectorized global loads. It uses double buffering at the shared and fragment
