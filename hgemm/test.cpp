@@ -160,53 +160,12 @@ protected:
         init_matrix(h_A.data(), h_A.size());
         init_matrix(h_B.data(), h_B.size());
 
-        // Special handling for rocBLAS
-        if constexpr(is_rocblas)
-        {
-            // Run the test with exception handling for rocBLAS
-            try
-            {
-                RunTestImpl(h_A, h_B, h_C, h_C_ref, M, N, K);
+        RunTestImpl(h_A, h_B, h_C, h_C_ref, M, N, K);
 
-                // Verify results, but don't fail the test if verification fails for rocBLAS
-                bool verification_result = verify_results(h_C, h_C_ref);
-                if(!verification_result)
-                {
-                    std::cout << "rocBLAS verification failed for size " << M << "x" << N << "x"
-                              << K << " - skipping test" << std::endl;
-                    // Instead of failing, we'll just skip this test case
-                    GTEST_SKIP() << "rocBLAS test skipped due to verification failure";
-                }
-                else
-                {
-                    // If verification passed, the test passed
-                    SUCCEED() << "rocBLAS test passed for size " << M << "x" << N << "x" << K;
-                }
-            }
-            catch(const std::exception& e)
-            {
-                std::cout << "rocBLAS test failed for size " << M << "x" << N << "x" << K
-                          << " with error: " << e.what() << std::endl;
-                GTEST_SKIP() << "rocBLAS test skipped due to exception: " << e.what();
-            }
-            catch(...)
-            {
-                std::cout << "rocBLAS test failed for size " << M << "x" << N << "x" << K
-                          << " with unknown error" << std::endl;
-                GTEST_SKIP() << "rocBLAS test skipped due to unknown exception";
-            }
-        }
-        else
-        {
-            // For non-rocBLAS kernels, run normally without try-catch
-            RunTestImpl(h_A, h_B, h_C, h_C_ref, M, N, K);
-
-            // Regular kernels should always pass verification
-            bool verification_result = verify_results(h_C, h_C_ref);
-            ASSERT_TRUE(verification_result)
-                << "Matrix verification failed for kernel: " << kernel_type_string(K_TYPE)
-                << " with size " << M << "x" << N << "x" << K;
-        }
+        bool verification_result = verify_results(h_C, h_C_ref);
+        ASSERT_TRUE(verification_result)
+            << "Matrix verification failed for kernel: " << kernel_type_string(K_TYPE)
+            << " with size " << M << "x" << N << "x" << K;
     }
 
 private:
@@ -334,7 +293,7 @@ TYPED_TEST(HGEMMTest, Size320)
               << N << "x" << K << std::endl;
 
     // Skip this test for specific kernel types
-    if (this->ShouldSkipTest("Size320"))
+    if(this->ShouldSkipTest("Size320"))
     {
         GTEST_SKIP() << "Size320 test skipped for " << kernel_type_string(TestFixture::K_TYPE);
         return;

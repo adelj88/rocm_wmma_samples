@@ -75,12 +75,15 @@ __global__ void
             int gload  = col * M + row;
             int swrite = col * config_o2::lds_stride_A + row;
 
+            #ifdef BOUNDS_CHECK
             if((block_row + row + config_o2::vector_width - 1) < M && col < K)
+            #endif
             {
                 // Load full vector
                 *reinterpret_cast<config_o2::vector_type*>(a_tiles_0 + swrite)
                     = *reinterpret_cast<const config_o2::vector_type*>(A_tile_ptr + gload);
             }
+            #ifdef BOUNDS_CHECK
             else
             {
                 // Handle the boundary case element by element
@@ -96,6 +99,7 @@ __global__ void
                     }
                 }
             }
+            #endif
         }
     }
     else
@@ -110,12 +114,15 @@ __global__ void
             int gload  = row * N + col;
             int swrite = row * config_o2::lds_stride_B + col;
 
+            #ifdef BOUNDS_CHECK
             if(row < K && (block_col + col + config_o2::vector_width - 1) < N)
+            #endif
             {
                 // Load full vector
                 *reinterpret_cast<config_o2::vector_type*>(b_tiles_0 + swrite)
                     = *reinterpret_cast<const config_o2::vector_type*>(B_tile_ptr + gload);
             }
+            #ifdef BOUNDS_CHECK
             else
             {
                 // Handle the boundary case element by element
@@ -131,6 +138,7 @@ __global__ void
                     }
                 }
             }
+            #endif
         }
     }
     __syncthreads();
@@ -157,12 +165,15 @@ __global__ void
                 int gload  = col * M + row;
                 int swrite = col * config_o2::lds_stride_A + row;
 
+                #ifdef BOUNDS_CHECK
                 if((block_row + row + config_o2::vector_width - 1) < M
                    && (k_tile + config_o2::block_k + col) < K)
+                #endif
                 {
                     *reinterpret_cast<config_o2::vector_type*>(next_a + swrite)
                         = *reinterpret_cast<const config_o2::vector_type*>(next_A + gload);
                 }
+                #ifdef BOUNDS_CHECK
                 else
                 {
                     for(int v = 0; v < config_o2::vector_width; v++)
@@ -177,6 +188,7 @@ __global__ void
                         }
                     }
                 }
+                #endif
             }
         }
 
@@ -234,12 +246,15 @@ __global__ void
                 int gload  = row * N + col;
                 int swrite = row * config_o2::lds_stride_B + col;
 
+                #ifdef BOUNDS_CHECK
                 if((k_tile + config_o2::block_k + row) < K
                    && (block_col + col + config_o2::vector_width - 1) < N)
+                #endif
                 {
                     *reinterpret_cast<config_o2::vector_type*>(next_b + swrite)
                         = *reinterpret_cast<const config_o2::vector_type*>(next_B + gload);
                 }
+                #ifdef BOUNDS_CHECK
                 else
                 {
 
@@ -255,6 +270,7 @@ __global__ void
                         }
                     }
                 }
+                #endif
             }
         }
 
