@@ -166,6 +166,7 @@ int main(int argc, char* argv[])
            BENCHMARK_SIZE(kernel_type::wmma_opt_1),
            BENCHMARK_SIZE(kernel_type::wmma_opt_2),
            BENCHMARK_SIZE(kernel_type::wmma_opt_3),
+           BENCHMARK_SIZE(kernel_type::wmma_opt_4),
            BENCHMARK_SIZE(kernel_type::rocblas)};
 
     // Use manual timing

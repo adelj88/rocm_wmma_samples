@@ -57,45 +57,46 @@ struct wmma_config<kernel_type::wmma_opt_3>
 using config_o3 = wmma_config<kernel_type::wmma_opt_3>;
 
 /**
-    * @brief Half-precision GEMM using WMMA with a 3-pipeline using register prefetching
-    *
-    * This kernel combines the best aspects of wmma_opt_2 and wmma_prefetch to create a 3-
-    * pipeline without increasing shared memory usage. It maintains the double-buffered shared memory
-    * and fragment structures from wmma_opt_2 while adding register prefetching as a third .
-    * The three s are:
-    * 1. Global memory -> Register prefetch
-    * 2. Register -> Shared memory
-    * 3. Shared memory -> Fragment compute
-    *
-    * @tparam K_TYPE The type of kernel, should be 'kernel_type::wmma_opt_3'
-    * @param[out] C  Output matrix of size M × N
-    * @param[in]  A  Input matrix A of size M × K (stored in column-major format)
-    * @param[in]  B  Input matrix B of size K × N (stored in row-major format)
-    * @param[in]  M  Number of rows in matrices A and C
-    * @param[in]  N  Number of columns in matrices B and C
-    * @param[in]  K  Number of columns in matrix A/rows in matrix B
-    *
-    * @note Implements double-buffering at global->shared and shared->fragment
-    * @note Adds register prefetching as a third pipeline
-    * @note Each warp processes a 4×4 grid of 16×16 WMMA tiles
-    */
+ * @brief Half-precision GEMM using WMMA with a 3-pipeline using register prefetching
+ *
+ * This kernel combines the best aspects of wmma_opt_2 and wmma_prefetch to create a 3-
+ * pipeline without increasing shared memory usage. It maintains the double-buffered shared memory
+ * and fragment structures from wmma_opt_2 while adding register prefetching as a third .
+ * The three s are:
+ * 1. Global memory -> Register prefetch
+ * 2. Register -> Shared memory
+ * 3. Shared memory -> Fragment compute
+ * -mcumode is also used to compile this kernel.
+ *
+ * @tparam K_TYPE The type of kernel, should be 'kernel_type::wmma_opt_3'
+ * @param[out] C  Output matrix of size M × N
+ * @param[in]  A  Input matrix A of size M × K (stored in column-major format)
+ * @param[in]  B  Input matrix B of size K × N (stored in row-major format)
+ * @param[in]  M  Number of rows in matrices A and C
+ * @param[in]  N  Number of columns in matrices B and C
+ * @param[in]  K  Number of columns in matrix A/rows in matrix B
+ *
+ * @note Implements double-buffering at global->shared and shared->fragment
+ * @note Adds register prefetching as a third pipeline
+ * @note Each warp processes a 4×4 grid of 16×16 WMMA tiles
+ */
 template<>
 __global__ void
     __launch_bounds__(warp_size* config_o3::total_warps) kernel_hgemm<kernel_type::wmma_opt_3>(
         half* C, const half* A, const half* B, int M, int N, int K);
 
 /**
-    * Function Definition for calling WMMA Optimized V3 GEMM kernel
-    *
-    * @tparam K_TYPE The type of kernel, should be 'kernel_type::wmma_opt_3'
-    * @param C       Output matrix
-    * @param A       Input matrix A (stored in column-major format)
-    * @param B       Input matrix B (stored in row-major format)
-    * @param M       Number of rows in matrices A and C
-    * @param N       Number of columns in matrices B and C
-    * @param K       Number of columns in matrix A/rows in matrix B
-    * @param stream  HIP stream to execute kernel
-    */
+ * Function Definition for calling WMMA Optimized V3 GEMM kernel
+ *
+ * @tparam K_TYPE The type of kernel, should be 'kernel_type::wmma_opt_3'
+ * @param C       Output matrix
+ * @param A       Input matrix A (stored in column-major format)
+ * @param B       Input matrix B (stored in row-major format)
+ * @param M       Number of rows in matrices A and C
+ * @param N       Number of columns in matrices B and C
+ * @param K       Number of columns in matrix A/rows in matrix B
+ * @param stream  HIP stream to execute kernel
+ */
 template<>
 __host__ void hgemm_gpu<kernel_type::wmma_opt_3>(
     half* C, half* A, half* B, size_t M, size_t N, size_t K, hipStream_t& stream);

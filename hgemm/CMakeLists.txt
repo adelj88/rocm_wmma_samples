@@ -2,6 +2,7 @@ file(GLOB SRCS src/*.cpp)
 
 set_source_files_properties(src/wmma_opt_2.cpp PROPERTIES COMPILE_OPTIONS -mcumode)
 set_source_files_properties(src/wmma_opt_3.cpp PROPERTIES COMPILE_OPTIONS -mcumode)
+set_source_files_properties(src/wmma_opt_4.cpp PROPERTIES COMPILE_OPTIONS -mcumode)
 
 add_library(hgemm STATIC ${SRCS})
 

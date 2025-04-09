@@ -33,28 +33,28 @@ The table below shows key performance points in my optimization progression:
 
 | Implementation | 2048x2048 (TFLOPs/s) | 4096x4096 (TFLOPs/s) | 8192x8192 (TFLOPs/s) | 12288x12288 (TFLOPs/s) | 16384x16384 (TFLOPs/s) |
 |----------------|---------------------|---------------------|---------------------|---------------------|---------------------|
-| Shared Memory  | 3.69 | 3.72 | 3.39 | 3.38 | 3.30 |
-| WMMA Naive     | 4.94 | 5.91 | 5.61 | 5.31 | 3.29 |
-| WMMA + Shared Memory | 12.00 | 13.21 | 11.70 | 11.74 | 11.58 |
+| Shared Memory  | 3.53 | 3.78 | 3.42 | 3.30 | 3.26 |
+| WMMA Naive     | 5.84 | 7.19 | 5.79 | 5.55 | 3.27 |
+| WMMA + Shared Memory | 11.71 | 12.40 | 11.86 | 11.87 | 11.78 |
 | ... | ... | ... | ... | ... | ... |
-| WMMA Optimized V2 | 49.64 | 64.09 | 77.37 | 77.13 | 75.92 |
-| WMMA Optimized V3 | 49.81 | 63.82 | 77.06 | 77.86 | 76.11 |
-| rocBLAS | 54.18 | 70.87 | 76.73 | 75.92 | 43.40 |
+| WMMA Optimized V3 | 47.90 | 64.15 | 77.11 | 78.06 | 76.50 |
+| WMMA Optimized V4 | 50.01 | 66.32 | 80.24 | 80.38 | 80.31 |
+| rocBLAS | 55.85 | 72.12 | 77.37 | 76.13 | 43.32 |
 
 [View detailed square matrix benchmarks](docs/general.md)
 
 ### LLM-Focused Performance
 
-The optimized WMMA implementations `wmma_opt_2` and `wmma_opt_3` are compared against `rocBLAS` on matrix dimensions common in transformer/LLM architectures:
+The optimized WMMA implementations `wmma_opt_3`, and `wmma_opt_4` are compared against `rocBLAS` on matrix dimensions common in transformer/LLM architectures:
 
-| Operation Type | Matrix Dimensions | `wmma_opt_2` (TFLOPs/s) | `wmma_opt_3` (TFLOPs/s) | `rocBLAS` (TFLOPs/s) | `wmma_opt_2`/`rocBLAS` | `wmma_opt_3`/`rocBLAS` |
+| Operation Type | Matrix Dimensions | `wmma_opt_3` (TFLOPs/s) | `wmma_opt_4` (TFLOPs/s) | `rocBLAS` (TFLOPs/s) | `wmma_opt_3`/`rocBLAS` | `wmma_opt_4`/`rocBLAS` |
 |----------------|-------------------|-----------------|-----------------|-------------------|----------|----------|
-| FFN Second Layer | m=4096, n=4096, k=16384 | 65.64 | 67.37 | 50.71 | 129.4% | 132.9% |
-| Very Long Context | m=65536, n=2048, k=2048 | 77.92 | 79.33 | 59.05 | 132.0% | 134.3% |
-| Attention Score | m=4096, n=2048, k=64 | 11.80 | 11.62 | 12.99 | 90.8% | 89.5% |
-| Attention Score (Large Batch) | m=8192, n=4096, k=128 | 35.61 | 33.29 | 40.62 | 87.7% | 82.0% |
+| FFN Second Layer | m=4096, n=4096, k=16384 | 67.09 | 68.94 | 52.99 | 126.6% | 130.1% |
+| Very Long Context | m=65536, n=2048, k=2048 | 78.90 | 80.68 | 61.95 | 127.4% | 130.2% |
+| Attention Score | m=4096, n=2048, k=64 | 11.24 | 12.33 | 12.56 | 89.5% | 98.2% |
+| Attention Score (Large Batch) | m=8192, n=4096, k=128 | 33.54 | 38.58 | 40.90 | 82.0% | 94.3% |
 
-On average, both `wmma_opt_2` and `wmma_opt_3` achieve competitive performance relative to `rocBLAS` across tested LLM workloads without tuning, with `wmma_opt_3` showing particularly strong results on FFN and long context processing tasks.
+On average, all three optimized implementations achieve competitive performance relative to `rocBLAS` across tested LLM workloads without tuning. While `rocBLAS` maintains an edge on smaller operations like attention scores, the optimized implementations significantly outperform `rocBLAS` on FFN and long context processing tasks, with `wmma_opt_4` showing the best overall results.
 
 [View detailed LLM benchmarks](docs/llm_focus.md)
 
@@ -113,7 +113,7 @@ ctest
 
 1. **WMMA HGEMM Optimization:**
    - Explore additional optimization techniques
-   - Tuning `wmma_opt_2` for different matrix sizes
+   - Tuning best implementation for different matrix sizes
    - Add more LLM-specific matrix dimension benchmark cases
    - Further tuning for LLM-specific matrix dimensions
    - Investigate performance on future RDNA4 hardware

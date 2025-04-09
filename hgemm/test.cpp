@@ -79,6 +79,7 @@ inline const char* kernel_type_string(kernel_type type)
         case kernel_type::wmma_opt_1: return "WMMA Optimized V1";
         case kernel_type::wmma_opt_2: return "WMMA Optimized V2";
         case kernel_type::wmma_opt_3: return "WMMA Optimized V3";
+        case kernel_type::wmma_opt_4: return "WMMA Optimized V4";
         case kernel_type::rocblas: return "rocBLAS";
         default: return "Unknown";
     }
@@ -102,6 +103,7 @@ using WmmaPrefetchKernel         = KernelTypeWrapper<kernel_type::wmma_prefetch>
 using WmmaOpt1Kernel             = KernelTypeWrapper<kernel_type::wmma_opt_1>;
 using WmmaOpt2Kernel             = KernelTypeWrapper<kernel_type::wmma_opt_2>;
 using WmmaOpt3Kernel             = KernelTypeWrapper<kernel_type::wmma_opt_3>;
+using WmmaOpt4Kernel             = KernelTypeWrapper<kernel_type::wmma_opt_4>;
 using RocblasKernel              = KernelTypeWrapper<kernel_type::rocblas>;
 
 // Test fixture for HGEMM testing
@@ -218,6 +220,7 @@ using KernelTypes = ::testing::Types<SharedMemoryKernel,
                                      WmmaOpt1Kernel,
                                      WmmaOpt2Kernel,
                                      WmmaOpt3Kernel,
+                                     WmmaOpt4Kernel,
                                      RocblasKernel>;
 
 TYPED_TEST_SUITE(HGEMMTest, KernelTypes);

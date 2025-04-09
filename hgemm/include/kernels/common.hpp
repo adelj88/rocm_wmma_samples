@@ -42,6 +42,7 @@ enum class kernel_type
     wmma_opt_1,
     wmma_opt_2,
     wmma_opt_3,
+    wmma_opt_4,
     rocblas
 };
 
@@ -75,17 +76,17 @@ template<kernel_type K_TYPE>
 __global__ void kernel_hgemm(half* C, const half* A, const half* B, int M, int N, int K);
 
 /**
-   * @brief Helper function for swizzled tile mapping
-   *
-   * Computes block indices using a swizzled mapping to improve L2 cache locality.
-   * This is applied at the grid level to change the order in which tiles are processed.
-   *
-   * @param[in]  tile_id    Linear block ID
-   * @param[in]  grid_m     Number of blocks in M dimension
-   * @param[in]  grid_n     Number of blocks in N dimension
-   * @param[out] block_row  Computed block row (M dimension)
-   * @param[out] block_col  Computed block column (N dimension)
-   */
+ * @brief Helper function for swizzled tile mapping
+ *
+ * Computes block indices using a swizzled mapping to improve L2 cache locality.
+ * This is applied at the grid level to change the order in which tiles are processed.
+ *
+ * @param[in]  tile_id    Linear block ID
+ * @param[in]  grid_m     Number of blocks in M dimension
+ * @param[in]  grid_n     Number of blocks in N dimension
+ * @param[out] block_row  Computed block row (M dimension)
+ * @param[out] block_col  Computed block column (N dimension)
+ */
 template<int GROUP_SIZE, int BLOCK_M, int BLOCK_N>
 __device__ __forceinline__ void
     swizzle_tile_mapping(int tile_id, int grid_m, int grid_n, int* block_row, int* block_col)
@@ -105,17 +106,17 @@ __device__ __forceinline__ void
 }
 
 /**
-   * @brief Helper function for Hilbert-curve tile mapping
-   *
-   * Computes block indices using a Hilbert-curve mapping to improve L2 cache locality.
-   * This is applied at the grid level to change the order in which tiles are processed.
-   *
-   * @param[in]  tile_id    Linear block ID
-   * @param[in]  grid_m     Number of blocks in M dimension
-   * @param[in]  grid_n     Number of blocks in N dimension
-   * @param[out] block_row  Computed block row (M dimension)
-   * @param[out] block_col  Computed block column (N dimension)
-   */
+ * @brief Helper function for Hilbert-curve tile mapping
+ *
+ * Computes block indices using a Hilbert-curve mapping to improve L2 cache locality.
+ * This is applied at the grid level to change the order in which tiles are processed.
+ *
+ * @param[in]  tile_id    Linear block ID
+ * @param[in]  grid_m     Number of blocks in M dimension
+ * @param[in]  grid_n     Number of blocks in N dimension
+ * @param[out] block_row  Computed block row (M dimension)
+ * @param[out] block_col  Computed block column (N dimension)
+ */
 template<int BLOCK_M, int BLOCK_N>
 __device__ __forceinline__ void
     hilbert_tile_mapping(int tile_id, int grid_m, int grid_n, int* block_row, int* block_col)

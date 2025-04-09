@@ -22,14 +22,14 @@
  * SOFTWARE.
  */
 
-#ifndef HIP_WMMA_OPT_2_HPP
-#define HIP_WMMA_OPT_2_HPP
+#ifndef HIP_WMMA_OPT_4_HPP
+#define HIP_WMMA_OPT_4_HPP
 
 #include <common/matrix.hpp>
 #include <kernels/common.hpp>
 
 template<>
-struct wmma_config<kernel_type::wmma_opt_2>
+struct wmma_config<kernel_type::wmma_opt_4>
 {
     static constexpr int warps_m     = 4;
     static constexpr int warps_n     = 4;
@@ -40,7 +40,7 @@ struct wmma_config<kernel_type::wmma_opt_2>
 
     static constexpr int block_m = warps_m * warp_tile_m * wmma_tile; // 4*4*16 = 256
     static constexpr int block_n = warps_n * warp_tile_n * wmma_tile; // 4*4*16 = 256
-    static constexpr int block_k = 32;
+    static constexpr int block_k = 16;
 
     // For A (stored column-major), each column has block_m elements.
     static constexpr int lds_stride_A = block_m;
@@ -54,7 +54,7 @@ struct wmma_config<kernel_type::wmma_opt_2>
     static constexpr int vector_width = (sizeof(float16) / sizeof(half));
 };
 
-using config_o2 = wmma_config<kernel_type::wmma_opt_2>;
+using config_o4 = wmma_config<kernel_type::wmma_opt_4>;
 
 /**
  * @brief Half-precision GEMM using WMMA with shared memory, shared double buffering,
@@ -67,26 +67,27 @@ using config_o2 = wmma_config<kernel_type::wmma_opt_2>;
  * in parallel. The kernel also incorporates Hilbert-curve mapping for improved L2 cache locality.
  * This kernel also re-orders fragment loading to improve efficiency and uses
  * __launch_bounds__ to limit register pressure. -mcumode is also used to compile this kernel.
+ * This kernel uses less shared memory than wmma_opt_2 and orders the cooperative loading differently.
  * This kernel relies on buffer load/store instructions for better out-of-bounds access performance; if manual
  * boundary checking is enabled performance takes a hit (prefer wmma_opt_3 in such cases).
  *
- * @tparam K_TYPE The type of kernel, should be 'kernel_type::wmma_opt_2'
+ * @tparam K_TYPE The type of kernel, should be 'kernel_type::wmma_opt_4'
  * @param[out] C  Output matrix of size M × N
  * @param[in]  A  Input matrix A of size M × K (stored in column-major format)
  * @param[in]  B  Input matrix B of size K × N (stored in row-major format)
  * @param[in]  M  Number of rows in matrices A and C
  * @param[in]  N  Number of columns in matrices B and C
  * @param[in]  K  Number of columns in matrix A/rows in matrix B
-    *
-    * @note Implements double-buffering at global->shared
-    * @note Each warp processes a 4×4 grid of 16×16 WMMA tiles
-    * @note Uses shared memory tiles of size (block_m × block_k) for A and (block_k × block_n) for B
-    * @note Employs a 4×4 warp grid configuration within each thread block
-    * @note Uses Hilbert-curve mapping for improved cache locality
-    */
+ *
+ * @note Implements double-buffering at global->shared
+ * @note Each warp processes a 4×4 grid of 16×16 WMMA tiles
+ * @note Uses shared memory tiles of size (block_m × block_k) for A and (block_k × block_n) for B
+ * @note Employs a 4×4 warp grid configuration within each thread block
+ * @note Uses Hilbert-curve mapping for improved cache locality
+ */
 template<>
 __global__ void
-    __launch_bounds__(warp_size* config_o2::total_warps) kernel_hgemm<kernel_type::wmma_opt_2>(
+    __launch_bounds__(warp_size* config_o4::total_warps) kernel_hgemm<kernel_type::wmma_opt_4>(
         half* C, const half* A, const half* B, int M, int N, int K);
 
 /**
@@ -102,7 +103,7 @@ __global__ void
  * @param stream  HIP stream to execute kernel
  */
 template<>
-__host__ void hgemm_gpu<kernel_type::wmma_opt_2>(
+__host__ void hgemm_gpu<kernel_type::wmma_opt_4>(
     half* C, half* A, half* B, size_t M, size_t N, size_t K, hipStream_t& stream);
 
-#endif // HIP_WMMA_OPT_2_HPP
+#endif // HIP_WMMA_OPT_4_HPP
