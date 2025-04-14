@@ -61,8 +61,8 @@ using config_o3 = wmma_config<kernel_type::wmma_opt_3>;
  *
  * This kernel combines the best aspects of wmma_opt_2 and wmma_prefetch to create a 3-
  * pipeline without increasing shared memory usage. It maintains the double-buffered shared memory
- * and fragment structures from wmma_opt_2 while adding register prefetching as a third .
- * The three s are:
+ * and fragment structures from wmma_opt_2 while adding register prefetching as another step.
+ * The three stages are:
  * 1. Global memory -> Register prefetch
  * 2. Register -> Shared memory
  * 3. Shared memory -> Fragment compute

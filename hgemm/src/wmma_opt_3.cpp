@@ -1,6 +1,8 @@
 #include <hip/hip_runtime.h>
 #include <kernels/wmma_opt_3.hpp>
 
+#define USE_SHARED_WRITE
+
 template<>
 __global__ void
     __launch_bounds__(warp_size* config_o3::total_warps) kernel_hgemm<kernel_type::wmma_opt_3>(
@@ -397,6 +399,7 @@ __global__ void
         __syncthreads();
     }
 
+#ifdef USE_SHARED_WRITE
     // Calculate the total size of the output tile
     constexpr int total_tile_elements = config_o3::block_m * config_o3::block_n;
 
@@ -440,7 +443,7 @@ __global__ void
             {
                 const int warp_n_base_local = warp_n_base + wn * wmma_tile;
 
-#pragma unroll
+    #pragma unroll
                 for(int i = 0; i < wmma_tile / 2; ++i)
                 {
                     const int row_local = warp_m_local + i * 2 + half_warp_id;
@@ -489,20 +492,30 @@ __global__ void
         }
         __syncthreads();
     }
+#else
+    // Write the computed fragments to global memory.
+    half* C_warp = C_base + warp_m_base * N + warp_n_base;
+    for(int wm = 0; wm < config_o3::warp_tile_m; wm++)
+    {
+        half* C_row = C_warp + wm * wmma_tile * N;
+        for(int wn = 0; wn < config_o3::warp_tile_n; wn++)
+        {
+            const int n_offset = wn * wmma_tile + half_lane;
+    #pragma unroll
+            for(int i = 0; i < wmma_tile / 2; ++i)
+            {
+                const int row = i * 2 + half_warp_id;
+                if(block_row + warp_m_base + wm * wmma_tile + row < M
+                   && block_col + warp_n_base + n_offset < N)
+                {
+                    C_row[row * N + n_offset] = c_frags[wm][wn][i * 2];
+                }
+            }
+        }
+    }
+#endif
 }
 
-/**
-    * Function Definition for calling 3-Stage Pipelined WMMA GEMM kernel
-    *
-    * @tparam K_TYPE The type of kernel, should be 'kernel_type::wmma_opt_3'
-    * @param C       Output matrix
-    * @param A       Input matrix A (stored in column-major format)
-    * @param B       Input matrix B (stored in row-major format)
-    * @param M       Number of rows in matrices A and C
-    * @param N       Number of columns in matrices B and C
-    * @param K       Number of columns in matrix A/rows in matrix B
-    * @param stream  HIP stream to execute kernel
-    */
 template<>
 __host__ void hgemm_gpu<kernel_type::wmma_opt_3>(
     half* C, half* A, half* B, size_t M, size_t N, size_t K, hipStream_t& stream)

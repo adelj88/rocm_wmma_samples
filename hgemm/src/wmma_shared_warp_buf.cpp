@@ -209,18 +209,6 @@ __global__ void kernel_hgemm<kernel_type::wmma_shared_warp_buf>(
     }
 }
 
-/**
- * Function Definition for calling double-buffered WMMA + Shared + Warp-Tiling GEMM kernel
- *
- * @tparam K_TYPE The type of kernel, should be 'kernel_type::wmma_shared_warp_buf'
- * @param C       Output matrix
- * @param A       Input matrix A
- * @param B       Input matrix B
- * @param M       Number of rows in matrices A and C
- * @param N       Number of columns in matrices B and C
- * @param K       Number of columns in matrix A/rows in matrix B
- * @param stream  HIP stream to execute kernel
- */
 template<>
 __host__ void hgemm_gpu<kernel_type::wmma_shared_warp_buf>(
     half* C, half* A, half* B, size_t M, size_t N, size_t K, hipStream_t& stream)
