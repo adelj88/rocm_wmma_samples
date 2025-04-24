@@ -71,8 +71,8 @@ void run_benchmark(benchmark::State& state, size_t M, size_t N, size_t K)
     matrix<half, layout_selector<K_TYPE>::c_layout> h_C_ref(M, N);
 
     // Initialize input matrices with random values
-    init_matrix(h_A.data(), h_A.size());
-    init_matrix(h_B.data(), h_B.size());
+    init_matrix(h_A);
+    init_matrix(h_B);
 
     hipStream_t stream;
     HIP_CHECK(hipStreamCreate(&stream));

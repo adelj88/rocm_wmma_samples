@@ -194,7 +194,7 @@ bool verify_results(const matrix<half, L>& gpu_result, const matrix<half, L>& cp
     bool matrix_norm_pass  = rel_frob_error <= 0.05f; // 5% error in Frobenius norm
 
     // Use consistent SSIM threshold regardless of matrix size
-    float ssim_threshold = 0.95f;
+    float ssim_threshold = 0.98f;
 
     bool pattern_pass = ssim > ssim_threshold; // Pattern similarity threshold
 

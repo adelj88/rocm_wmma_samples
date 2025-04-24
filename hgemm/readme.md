@@ -77,7 +77,7 @@ The project implements a comprehensive verification system to ensure kernel corr
 
 ### 3. Pattern Validation
 - **Structural Similarity (SSIM):** Borrowed from image processing, this metric evaluates if the GPU result preserves the mathematical pattern of the reference
-- **Threshold Check:** SSIM must be above 0.95 (95% similarity) to pass
+- **Threshold Check:** SSIM must be above 0.98 (98% similarity) to pass
 - **Error Pattern Analysis:** Helps identify systematic issues like precision loss or algorithmic flaws
 
 ### 4. Comprehensive Reporting

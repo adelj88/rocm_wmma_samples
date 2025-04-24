@@ -69,18 +69,16 @@ __global__ void
         for(int i = cid * config_o4::vector_width; i < (config_o4::block_m * config_o4::block_k);
             i += half_block * config_o4::vector_width)
         {
-            const int col = i / config_o4::block_m;
-            const int row = i % config_o4::block_m;
-
-            int gload  = col * M + row;
-            int swrite = col * config_o4::lds_stride_A + row;
+            const int col   = i / config_o4::block_m;
+            const int row   = i % config_o4::block_m;
+            int       gload = col * M + row;
 
 #ifdef BOUNDS_CHECK
             if((block_row + row + config_o4::vector_width - 1) < M && col < K)
 #endif
             {
                 // Load full vector
-                *reinterpret_cast<config_o4::vector_type*>(a_tiles_0 + swrite)
+                *reinterpret_cast<config_o4::vector_type*>(a_tiles_0 + i)
                     = *reinterpret_cast<const config_o4::vector_type*>(A_tile_ptr + gload);
             }
 #ifdef BOUNDS_CHECK
@@ -91,11 +89,11 @@ __global__ void
                 {
                     if(block_row + row + v < M && col < K)
                     {
-                        a_tiles_0[swrite + v] = A_tile_ptr[gload + v];
+                        a_tiles_0[i + v] = A_tile_ptr[gload + v];
                     }
                     else
                     {
-                        a_tiles_0[swrite + v] = static_cast<half>(0.0f);
+                        a_tiles_0[i + v] = static_cast<half>(0.0f);
                     }
                 }
             }
@@ -108,18 +106,16 @@ __global__ void
         for(int i = cid * config_o4::vector_width; i < (config_o4::block_k * config_o4::block_n);
             i += half_block * config_o4::vector_width)
         {
-            const int row = i / config_o4::block_n;
-            const int col = i % config_o4::block_n;
-
-            int gload  = row * N + col;
-            int swrite = row * config_o4::lds_stride_B + col;
+            const int row   = i / config_o4::block_n;
+            const int col   = i % config_o4::block_n;
+            int       gload = row * N + col;
 
 #ifdef BOUNDS_CHECK
             if(row < K && (block_col + col + config_o4::vector_width - 1) < N)
 #endif
             {
                 // Load full vector
-                *reinterpret_cast<config_o4::vector_type*>(b_tiles_0 + swrite)
+                *reinterpret_cast<config_o4::vector_type*>(b_tiles_0 + i)
                     = *reinterpret_cast<const config_o4::vector_type*>(B_tile_ptr + gload);
             }
 #ifdef BOUNDS_CHECK
@@ -130,11 +126,11 @@ __global__ void
                 {
                     if(row < K && block_col + col + v < N)
                     {
-                        b_tiles_0[swrite + v] = B_tile_ptr[gload + v];
+                        b_tiles_0[i + v] = B_tile_ptr[gload + v];
                     }
                     else
                     {
-                        b_tiles_0[swrite + v] = static_cast<half>(0.0f);
+                        b_tiles_0[i + v] = static_cast<half>(0.0f);
                     }
                 }
             }
@@ -161,18 +157,16 @@ __global__ void
                     i < (config_o4::block_m * config_o4::block_k);
                     i += half_block * config_o4::vector_width)
                 {
-                    const int col = i / config_o4::block_m;
-                    const int row = i % config_o4::block_m;
-
-                    int gload  = col * M + row;
-                    int swrite = col * config_o4::lds_stride_A + row;
+                    const int col   = i / config_o4::block_m;
+                    const int row   = i % config_o4::block_m;
+                    int       gload = col * M + row;
 
 #ifdef BOUNDS_CHECK
                     if((block_row + row + config_o4::vector_width - 1) < M
                        && (k_tile + config_o4::block_k + col) < K)
 #endif
                     {
-                        *reinterpret_cast<config_o4::vector_type*>(next_a + swrite)
+                        *reinterpret_cast<config_o4::vector_type*>(next_a + i)
                             = *reinterpret_cast<const config_o4::vector_type*>(next_A + gload);
                     }
 #ifdef BOUNDS_CHECK
@@ -182,11 +176,11 @@ __global__ void
                         {
                             if(block_row + row + v < M && k_tile + config_o4::block_k + col < K)
                             {
-                                next_a[swrite + v] = next_A[gload + v];
+                                next_a[i + v] = next_A[gload + v];
                             }
                             else
                             {
-                                next_a[swrite + v] = static_cast<half>(0.0f);
+                                next_a[i + v] = static_cast<half>(0.0f);
                             }
                         }
                     }
@@ -201,18 +195,16 @@ __global__ void
                     i < (config_o4::block_k * config_o4::block_n);
                     i += half_block * config_o4::vector_width)
                 {
-                    const int row = i / config_o4::block_n;
-                    const int col = i % config_o4::block_n;
-
-                    int gload  = row * N + col;
-                    int swrite = row * config_o4::lds_stride_B + col;
+                    const int row   = i / config_o4::block_n;
+                    const int col   = i % config_o4::block_n;
+                    int       gload = row * N + col;
 
 #ifdef BOUNDS_CHECK
                     if((k_tile + config_o4::block_k + row) < K
                        && (block_col + col + config_o4::vector_width - 1) < N)
 #endif
                     {
-                        *reinterpret_cast<config_o4::vector_type*>(next_b + swrite)
+                        *reinterpret_cast<config_o4::vector_type*>(next_b + i)
                             = *reinterpret_cast<const config_o4::vector_type*>(next_B + gload);
                     }
 #ifdef BOUNDS_CHECK
@@ -223,11 +215,11 @@ __global__ void
                         {
                             if(k_tile + config_o4::block_k + row < K && block_col + col + v < N)
                             {
-                                next_b[swrite + v] = next_B[gload + v];
+                                next_b[i + v] = next_B[gload + v];
                             }
                             else
                             {
-                                next_b[swrite + v] = static_cast<half>(0.0f);
+                                next_b[i + v] = static_cast<half>(0.0f);
                             }
                         }
                     }
@@ -326,7 +318,7 @@ __global__ void
             {
                 const int warp_n_base_local = warp_n_base + wn * wmma_tile;
 
-#pragma unroll
+    #pragma unroll
                 for(int i = 0; i < wmma_tile / 2; ++i)
                 {
                     const int row_local = warp_m_local + i * 2 + half_warp_id;
@@ -384,7 +376,7 @@ __global__ void
         for(int wn = 0; wn < config_o4::warp_tile_n; wn++)
         {
             const int n_offset = wn * wmma_tile + half_lane;
-#pragma unroll
+    #pragma unroll
             for(int i = 0; i < wmma_tile / 2; ++i)
             {
                 const int row = i * 2 + half_warp_id;

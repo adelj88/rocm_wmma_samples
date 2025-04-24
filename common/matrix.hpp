@@ -178,19 +178,25 @@ private:
 /**
  * @brief Initialize matrix with random values
  * @tparam T Matrix element type
- * @param matrix Matrix to initialize
+ * @tparam L Matrix layout
+ * @param input Matrix to initialize
  */
-template<class T>
-void init_matrix(T* matrix, size_t size)
+template<class T, matrix_layout L>
+void init_matrix(matrix<T, L>& input)
 {
     std::random_device                    rd;
     std::mt19937                          gen(rd());
     //std::uniform_real_distribution<float> dis(0.1f, 0.2f);
     float tmp[5] = {0.1f, 0.125f, 0.15f, 0.175f, 0.2f};
 
-    for(size_t i = 0; i < size; ++i)
+    int l = 0;
+    for(size_t m = 0; m < input.m(); ++m)
     {
-        matrix[i] = static_cast<T>(tmp[i % 5]);
+        for(size_t n = 0; n < input.n(); ++n)
+        {
+            input(m, n) = static_cast<T>(tmp[l % 5]);
+            l++;
+        }
     }
 }
 
