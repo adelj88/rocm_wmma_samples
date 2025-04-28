@@ -1,14 +1,6 @@
-# Understanding HIP and WMMA Intrinsics
+# FP16 HGEMM with WMMA
 
-This project is a personal exploration of HIP programming and the RDNA3 Wave Matrix Multiply-Accumulate (WMMA) intrinsic. The primary goal was to deepen my understanding of the WMMA intrinsic and extend the fixed-size example provided in the [GPUOpen tutorial](https://gpuopen.com/learn/wmma_on_rdna3/) to support arbitrary matrix dimensions. While this project is primarily for personal learning, it may also serve as a helpful reference for others interested in exploring the WMMA intrinsic.
-
-**Note:** The WMMA intrinsic is specific to RDNA3 GPUs for now, so running this project requires an RDNA3-compatible GPU. A future feature may include testing this implementation on RDNA4 hardware when it becomes available.
-
-## Objectives
-This project aims to:
-1. Provide a simple example of HIP programming and WMMA usage for GPU-accelerated computation
-2. Extend beyond the fixed-size example in the GPUOpen tutorial by supporting arbitrary matrix dimensions (M, N, K)
-3. Enhance understanding of the WMMA intrinsic's mechanics, especially around data loading and storing
+This folder focuses on exploring Wave Matrix Multiply-Accumulate (WMMA) intrinsics in matrix-matrix multiplication.
 
 ## Features
 
@@ -90,7 +82,6 @@ The verification system provides detailed feedback for each test:
 ## Known Issues
 
 1. Some test cases are skipped for `shared` and `wmma_naive`, as there are no intentions to fix them.
-2. `rocBLAS` fails some test cases (or throws an exception), so tests are skipped.
 
 ## Usage
 

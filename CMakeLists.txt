@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(hip_wmma_samples LANGUAGES CXX)
+project(rocm_wmma_samples LANGUAGES CXX)
 
 # Set C++ standard to C++20
 set(CMAKE_CXX_STANDARD 20)
