@@ -104,7 +104,4 @@ ctest
 
 1. **WMMA HGEMM Optimization:**
    - Explore additional optimization techniques
-   - Tuning best implementation for different matrix sizes
-   - Add more LLM-specific matrix dimension benchmark cases
-   - Further tuning for LLM-specific matrix dimensions
    - Investigate performance on future RDNA4 hardware
