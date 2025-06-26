@@ -43,6 +43,7 @@ enum class kernel_type
     wmma_opt_2,
     wmma_opt_3,
     wmma_opt_4,
+    wmma_opt_5,
     rocblas
 };
 

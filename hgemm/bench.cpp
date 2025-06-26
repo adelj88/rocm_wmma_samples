@@ -112,13 +112,13 @@ void run_benchmark(benchmark::State& state, size_t M, size_t N, size_t K)
         hgemm_gpu<K_TYPE>(d_C, d_A, d_B, M, N, K, stream);
         HIP_CHECK(hipPeekAtLastError());
         float elapsed_time = timer.stop(stream);
-        HIP_CHECK(hipDeviceSynchronize());
 
         double seconds = elapsed_time / 1000.0;
         state.SetIterationTime(seconds);
         double tflops = (total_flops / seconds) * 1e-12;
         total_tflops += tflops;
     }
+    HIP_CHECK(hipDeviceSynchronize());
 
     state.counters["TFLOPS"] = total_tflops / state.iterations();
     state.SetBytesProcessed(state.iterations() * ((M * K) + (K * N) + (M * N)) * sizeof(half));
@@ -167,6 +167,7 @@ int main(int argc, char* argv[])
            BENCHMARK_SIZE(kernel_type::wmma_opt_2),
            BENCHMARK_SIZE(kernel_type::wmma_opt_3),
            BENCHMARK_SIZE(kernel_type::wmma_opt_4),
+           BENCHMARK_SIZE(kernel_type::wmma_opt_5),
            BENCHMARK_SIZE(kernel_type::rocblas)};
 
     // Use manual timing

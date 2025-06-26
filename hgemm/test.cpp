@@ -104,6 +104,7 @@ using WmmaOpt1Kernel             = KernelTypeWrapper<kernel_type::wmma_opt_1>;
 using WmmaOpt2Kernel             = KernelTypeWrapper<kernel_type::wmma_opt_2>;
 using WmmaOpt3Kernel             = KernelTypeWrapper<kernel_type::wmma_opt_3>;
 using WmmaOpt4Kernel             = KernelTypeWrapper<kernel_type::wmma_opt_4>;
+using WmmaOpt5Kernel             = KernelTypeWrapper<kernel_type::wmma_opt_5>;
 using RocblasKernel              = KernelTypeWrapper<kernel_type::rocblas>;
 
 // Test fixture for HGEMM testing
@@ -221,6 +222,7 @@ using KernelTypes = ::testing::Types<SharedMemoryKernel,
                                      WmmaOpt2Kernel,
                                      WmmaOpt3Kernel,
                                      WmmaOpt4Kernel,
+                                     WmmaOpt5Kernel,
                                      RocblasKernel>;
 
 TYPED_TEST_SUITE(HGEMMTest, KernelTypes);

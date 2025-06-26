@@ -13,7 +13,7 @@ This repository aims to:
 ### [FP16 HGEMM with WMMA](/hgemm)
 An exploration of the ROCm Wave Matrix Multiply-Accumulate (WMMA) intrinsic, demonstrating how to implement and optimize matrix multiplication using ROCm HIP. This project extends beyond basic examples to support arbitrary matrix dimensions and includes performance comparisons between different implementation approaches.
 
-A separate repository [rocm_wmma_gemm](https://github.com/adelj88/rocm_wmma_gemm) has already been created (based on the fastest implementation) which includes a tuner, and supports different input and output layouts (row-major and column-major).
+A separate repository [rocm_wmma_gemm](https://github.com/adelj88/rocm_wmma_gemm) has already been created (based on the fastest implementation) which includes a tuner (the implementation has been tuned for specific sizes already), and supports different input and output layouts (row-major and column-major).
 
 ## Building the Projects
 

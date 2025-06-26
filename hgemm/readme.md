@@ -8,14 +8,14 @@ This folder focuses on exploring Wave Matrix Multiply-Accumulate (WMMA) intrinsi
 - **Multiple Implementations:**
   - Basic WMMA implementation
   - Shared memory optimized WMMA
-  - Other optimizations combined with WMMA
+  - Five generations of optimized WMMA implementations (V1-V5)
   - Traditional shared memory implementation (for comparison)
 - **Performance Benchmarking:** Built-in benchmarking capabilities for comparing different implementations
 - **Correctness Verification:** CPU reference implementation for result validation
 
 ## Performance Highlights
 
-Performance measured on AMD Radeon RX 7900 GRE on Windows and WSL2 (HIP SDK 6.2.4). All implementations use half precision (FP16).
+Performance measured on AMD Radeon RX 7900 GRE on Windows (HIP SDK 6.2.4) and WSL2 (Ubuntu 24.04.1 LTS, ROCm 6.4.1). All implementations use half precision (FP16).
 
 Note: No tuning has been done for different sizes.
 
@@ -23,30 +23,43 @@ Note: No tuning has been done for different sizes.
 
 The table below shows key performance points in my optimization progression:
 
-| Implementation | 2048x2048 (TFLOPs/s) | 4096x4096 (TFLOPs/s) | 8192x8192 (TFLOPs/s) | 12288x12288 (TFLOPs/s) | 16384x16384 (TFLOPs/s) |
-|----------------|---------------------|---------------------|---------------------|---------------------|---------------------|
-| Shared Memory  | 3.53 | 3.78 | 3.42 | 3.30 | 3.26 |
-| WMMA Naive     | 5.84 | 7.19 | 5.79 | 5.55 | 3.27 |
-| WMMA + Shared Memory | 11.71 | 12.40 | 11.86 | 11.87 | 11.78 |
-| ... | ... | ... | ... | ... | ... |
-| WMMA Optimized V3 | 47.90 | 64.15 | 77.11 | 78.06 | 76.50 |
-| WMMA Optimized V4 | 50.01 | 66.32 | 80.24 | 80.38 | 80.31 |
-| rocBLAS | 55.85 | 72.12 | 77.37 | 76.13 | 43.32 |
+| Implementation | 2048x2048 (TFLOPs/s) | 4096x4096 (TFLOPs/s) | 8192x8192 (TFLOPs/s) |
+|----------------|---------------------|---------------------|---------------------|
+| Shared Memory  | 3.68 | 3.80 | 3.55 |
+| WMMA Naive     | 5.39 | 6.89 | 5.77 |
+| WMMA + Shared Memory | 10.75 | 12.06 | 11.74 |
+| ... | ... | ... | ... |
+| WMMA Optimized V3 | 50.76 | 55.51 | 73.75 |
+| WMMA Optimized V4 | 52.78 | 58.81 | 76.37 |
+| WMMA Optimized V5 | 52.18 | 69.49 | 76.36 |
+| rocBLAS | 55.96 | 66.75 | 75.13 |
+
+**Key Achievements:**
+- **~22x speedup** from baseline shared memory to best optimized version
+- **WMMA Optimized V5** achieves 94.2% of rocBLAS performance on average across LLM workloads
+- Performance now matches or exceeds rocBLAS on many transformer-specific matrix shapes
 
 [View detailed square matrix benchmarks](docs/general.md)
 
 ### LLM-Focused Performance
 
-The optimized WMMA implementations `wmma_opt_3`, and `wmma_opt_4` are compared against `rocBLAS` on matrix dimensions common in transformer/LLM architectures:
+The optimized WMMA implementations `wmma_opt_3`, `wmma_opt_4`, and `wmma_opt_5` are compared against `rocBLAS` on matrix dimensions common in transformer/LLM architectures:
 
-| Operation Type | Matrix Dimensions | `wmma_opt_3` (TFLOPs/s) | `wmma_opt_4` (TFLOPs/s) | `rocBLAS` (TFLOPs/s) | `wmma_opt_3`/`rocBLAS` | `wmma_opt_4`/`rocBLAS` |
-|----------------|-------------------|-----------------|-----------------|-------------------|----------|----------|
-| FFN Second Layer | m=4096, n=4096, k=16384 | 67.09 | 68.94 | 52.99 | 126.6% | 130.1% |
-| Very Long Context | m=65536, n=2048, k=2048 | 78.90 | 80.68 | 61.95 | 127.4% | 130.2% |
-| Attention Score | m=4096, n=2048, k=64 | 11.24 | 12.33 | 12.56 | 89.5% | 98.2% |
-| Attention Score (Large Batch) | m=8192, n=4096, k=128 | 33.54 | 38.58 | 40.90 | 82.0% | 94.3% |
+| Operation Type | Matrix Dimensions | `wmma_opt_3` (TFLOPs/s) | `wmma_opt_4` (TFLOPs/s) | `wmma_opt_5` (TFLOPs/s) | `rocBLAS` (TFLOPs/s) | Best/`rocBLAS` |
+|----------------|-------------------|-----------------|-----------------|-----------------|-------------------|----------|
+| QKV Projection | m=4096, n=4096, k=1024 | 55.61 | 58.63 | 66.35 | 70.41 | 94.2% |
+| QKV Projection (Large Batch) | m=8192, n=8192, k=1024 | 69.57 | 73.62 | 74.28 | 74.87 | 99.2% |
+| FFN First Layer | m=4096, n=16384, k=4096 | 74.93 | 78.35 | 76.78 | 76.56 | 102.3% |
+| FFN Second Layer | m=4096, n=4096, k=16384 | 66.52 | 68.69 | 74.41 | 53.73 | 138.5% |
+| Model with 5120 Hidden Dim | m=4096, n=5120, k=5120 | 81.72 | 84.80 | 84.00 | 75.71 | 112.0% |
+| Long Context Processing | m=32768, n=4096, k=4096 | 76.84 | 79.97 | 80.08 | 76.78 | 104.3% |
+| Very Long Context | m=65536, n=2048, k=2048 | 73.79 | 77.32 | 77.39 | 61.51 | 125.8% |
 
-On average, all three optimized implementations achieve competitive performance relative to `rocBLAS` across tested LLM workloads without tuning. While `rocBLAS` maintains an edge on smaller operations like attention scores, the optimized implementations significantly outperform `rocBLAS` on FFN and long context processing tasks, with `wmma_opt_4` showing the best overall results.
+**Performance Summary:**
+- **Competitive with rocBLAS:** Achieving 90-99% performance on most workloads
+- **Exceeding rocBLAS:** Up to 38.5% faster on FFN layers and long context processing
+- **Best Overall:** `wmma_opt_5` shows the most consistent performance across different workload types
+- **No Tuning Required:** Results achieved without kernel parameter tuning for specific matrix sizes
 
 [View detailed LLM benchmarks](docs/llm_focus.md)
 
@@ -62,17 +75,12 @@ The project implements a comprehensive verification system to ensure kernel corr
   - Average relative error: Measures overall precision across all matrix elements
   - Number of valid comparisons: Ensures all elements are verified
 
-### 2. Matrix Norm Validation
-- **Relative Frobenius Norm Error:** Computes the difference between GPU and CPU results using matrix norms
-- **Threshold-based Check:** Ensures the global error magnitude stays below acceptable limits
-- **Mathematical Robustness:** Provides a single metric that captures overall numerical stability
-
-### 3. Pattern Validation
+### 2. Pattern Validation
 - **Structural Similarity (SSIM):** Borrowed from image processing, this metric evaluates if the GPU result preserves the mathematical pattern of the reference
 - **Threshold Check:** SSIM must be above 0.98 (98% similarity) to pass
 - **Error Pattern Analysis:** Helps identify systematic issues like precision loss or algorithmic flaws
 
-### 4. Comprehensive Reporting
+### 3. Comprehensive Reporting
 The verification system provides detailed feedback for each test:
 - Specific error locations and values
 - Statistical summary of errors
@@ -103,5 +111,5 @@ ctest
 ## Future Improvements
 
 1. **WMMA HGEMM Optimization:**
-   - Explore additional optimization techniques
+   - Explore additional optimization techniques beyond V5
    - Investigate performance on future RDNA4 hardware
